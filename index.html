@@ -80,9 +80,9 @@ h1{font-family:'Shippori Mincho',serif;font-weight:700;font-size:25px;margin:0;l
 <script>
 const $=s=>document.querySelector(s);
 // ライブ価格を使う場合はWorkerのURL（FX Naviと同じものでOK）。空ならAction更新のみ
-const LIVE_PRICE_URL = "https://fx-navi.koheiomura5414.workers.dev";
+const LIVE_PRICE_URL = "";
 // WorkerにNOTIFY_KEYを設定した場合のみ同じ値を（任意・FX Naviと共用可）
-const NOTIFY_KEY = "高坂麗奈ちゃん";
+const NOTIFY_KEY = "";
 let S=null, PRICE={};
 const fmt=(x,d)=>x==null?'—':(d!=null?Number(x).toFixed(d):x);
 const vmap={buy:['v-buy','買い 順張り'],soft:['v-soft','買い寄り'],wait:['v-wait','様子見'],none:['v-none','対象外']};

@@ -2,7 +2,7 @@
   "name": "FX キャリーナビ",
   "short_name": "CarryNavi",
   "description": "金利差(キャリー)特化のFXスイング・ナビ",
-  "start_url": "./carry.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
