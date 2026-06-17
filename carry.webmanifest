@@ -1,0 +1,17 @@
+{
+  "name": "FX キャリーナビ",
+  "short_name": "CarryNavi",
+  "description": "金利差(キャリー)特化のFXスイング・ナビ",
+  "start_url": "./carry.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#05070b",
+  "theme_color": "#0a0c10",
+  "lang": "ja",
+  "categories": ["finance"],
+  "icons": [
+    { "src": "carry-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "carry-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

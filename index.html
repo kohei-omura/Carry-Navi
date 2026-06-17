@@ -1,0 +1,229 @@
+<!doctype html><html lang="ja"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>FX キャリーナビ</title>
+<link rel="manifest" href="carry.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CarryNavi">
+<meta name="theme-color" content="#0a0c10">
+<link rel="apple-touch-icon" href="carry-icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0c10;--card:#11151c;--card2:#0e1218;--line:#1f2632;--ink:#e9edf3;--mut:#8893a4;
+--gold:#cda86a;--up:#4ade9b;--down:#ff7a8a;--soft:#e0b572;--mono:'IBM Plex Mono',monospace}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Zen Kaku Gothic New',sans-serif;
+padding:max(env(safe-area-inset-top),14px) 14px calc(env(safe-area-inset-bottom) + 30px)}
+.wrap{max-width:560px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:6px 2px 14px}
+h1{font-family:'Shippori Mincho',serif;font-weight:700;font-size:25px;margin:0;letter-spacing:.04em}
+.sub{color:var(--gold);font-size:10px;letter-spacing:.32em;margin-top:5px}
+.hr{font-family:var(--mono);font-size:10.5px;color:var(--mut);text-align:right;line-height:1.7}
+.badge{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+.badge.open{color:var(--up);border-color:rgba(74,222,155,.4)} .badge.close{color:var(--down);border-color:rgba(255,122,138,.4)}
+.sec{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--mut);letter-spacing:.18em;margin:18px 4px 10px;display:flex;align-items:center;gap:8px}
+.sec::before{content:"—";color:var(--gold)}
+/* ランキング */
+.rank{background:var(--card2);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.rrow{display:grid;grid-template-columns:26px 1fr auto;gap:10px;align-items:center;padding:11px 13px;border-top:1px solid var(--line)}
+.rrow:first-child{border-top:none}
+.rnum{font-family:var(--mono);color:var(--gold);font-size:13px}
+.rsym{font-family:var(--mono);font-size:14px}.rsym small{color:var(--mut);font-size:10.5px;margin-left:6px}
+.crbar{height:5px;border-radius:3px;background:#1a212b;margin-top:6px;overflow:hidden}
+.crbar>i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--up))}
+.vchip{font-family:var(--mono);font-size:10.5px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+.v-buy{color:var(--up);border-color:rgba(74,222,155,.4)} .v-soft{color:var(--soft);border-color:rgba(205,168,106,.35)}
+.v-wait{color:var(--mut)} .v-none{color:var(--mut)}
+/* カード */
+.card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:16px;padding:15px;margin-bottom:13px}
+.row{display:flex;justify-content:space-between;align-items:center}
+.sym{font-family:var(--mono);font-size:17px;letter-spacing:.02em}
+.price{font-family:var(--mono);font-size:30px;font-weight:600}
+.cr{font-family:var(--mono);font-size:18px}.cr.pos{color:var(--up)}.cr.neg{color:var(--down)}
+.crlab{font-size:9.5px;color:var(--mut);text-align:right;letter-spacing:.08em}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.chip{font-family:var(--mono);font-size:11px;color:var(--mut);background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+.chip b{color:var(--ink);font-weight:600}.chip b.up{color:var(--up)}.chip b.dn{color:var(--down)}
+.chip.tp b{color:var(--up)}.chip.sl b{color:var(--down)}
+.reasons{font-family:var(--mono);font-size:10.5px;color:var(--mut);margin-top:10px;line-height:1.7}
+.riskb{margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--down);background:rgba(255,122,138,.07);border:1px solid rgba(255,122,138,.3);border-radius:9px;padding:8px 10px}
+.note{color:var(--mut);font-size:11px;line-height:1.8;margin:14px 4px;font-family:var(--mono)}
+.spark{margin-top:12px}
+.foot{color:var(--mut);font-size:10.5px;line-height:1.8;text-align:center;margin-top:18px;font-family:var(--mono)}
+.card{animation:fade .5s both}@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+</style></head>
+<body><div class="wrap">
+<header>
+  <div style="display:flex;align-items:center;gap:11px">
+   <svg class="logo" viewBox="0 0 100 100" width="44" height="44" aria-hidden="true">
+    <defs><linearGradient id="lg" x1="0" y1="0" x2="0.2" y2="1"><stop offset="0" stop-color="#f6e4b8"/><stop offset="0.5" stop-color="#cda86a"/><stop offset="1" stop-color="#937138"/></linearGradient>
+    <linearGradient id="lgr" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#249e6c"/><stop offset="1" stop-color="#73ffbd"/></linearGradient></defs>
+    <circle cx="50" cy="50" r="30" fill="none" stroke="url(#lg)" stroke-width="3.4"/>
+    <path d="M30 64 L40 58 L49 61 L60 47 L70 39" fill="none" stroke="url(#lgr)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M70 39 L62 41 M70 39 L68 47" fill="none" stroke="url(#lgr)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="50" y="45" text-anchor="middle" dominant-baseline="middle" font-family="Arial,sans-serif" font-weight="900" font-size="38" fill="url(#lg)">¥</text>
+   </svg>
+   <div><h1>FX キャリーナビ</h1><div class="sub">CARRY · SWAP · SWING 4H</div></div></div>
+  <div class="hr"><span id="mkt" class="badge">―</span><div id="updated">読み込み中…</div><div id="asof"></div></div>
+</header>
+
+<div class="sec">金利差ランキング（キャリー対リスク順）</div>
+<div class="rank" id="ranking"></div>
+<div class="note">C/R＝金利差 ÷ 年率ボラ。高いほど「金利差のわりに値動きが穏やか」。ただしC/Rは過去ボラ基準で、新興国の急落・減価(尾部)リスクは測りきれません。</div>
+
+<div class="sec">ペア別シグナル</div>
+<div id="pairs"></div>
+
+<div class="foot" id="foot"></div>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+// ライブ価格を使う場合はWorkerのURL（FX Naviと同じものでOK）。空ならAction更新のみ
+const LIVE_PRICE_URL = "";
+// WorkerにNOTIFY_KEYを設定した場合のみ同じ値を（任意・FX Naviと共用可）
+const NOTIFY_KEY = "";
+let S=null, PRICE={};
+const fmt=(x,d)=>x==null?'—':(d!=null?Number(x).toFixed(d):x);
+const vmap={buy:['v-buy','買い 順張り'],soft:['v-soft','買い寄り'],wait:['v-wait','様子見'],none:['v-none','対象外']};
+
+function spark(closes,ef,es){
+  const W=300,H=70,all=[...closes,...ef.filter(x=>x!=null),...es.filter(x=>x!=null)];
+  if(!closes.length)return'';const mn=Math.min(...all),mx=Math.max(...all),rg=(mx-mn)||1;
+  const X=i=>i/(closes.length-1)*W, Y=v=>H-(v-mn)/rg*H;
+  const path=a=>{let d='',st=false;a.forEach((v,i)=>{if(v==null){st=false;return}d+=(st?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' ';st=true});return d;};
+  return`<svg class="spark" viewBox="0 0 ${W} ${H}" width="100%" height="70" preserveAspectRatio="none">
+   <path d="${path(closes)}" fill="none" stroke="#3a4554" stroke-width="1"/>
+   <path d="${path(es)}" fill="none" stroke="var(--gold)" stroke-width="1.6"/>
+   <path d="${path(ef)}" fill="none" stroke="var(--up)" stroke-width="1.6"/></svg>`;
+}
+function rankRow(r,i){
+  const [vc,vt]=vmap[r.vcls]||vmap.none;
+  const w=Math.max(4,Math.min(100,r.ctr/ (S.ranking[0]?.ctr||1) *100));
+  return`<div class="rrow"><div class="rnum">${i+1}</div>
+    <div><div class="rsym">${r.symbol.replace('_','/')} <small>金利差 ${r.diff>=0?'+':''}${fmt(r.diff)}%</small> ${r.risk?'<small>⚠</small>':''}</div>
+      <div class="crbar"><i style="width:${w}%"></i></div></div>
+    <div style="text-align:right"><div class="vchip ${vc}">${vt}</div><div class="crlab" style="margin-top:5px">C/R ${fmt(r.ctr,2)}</div></div></div>`;
+}
+function card(p,i){
+  const [vc,vt]=vmap[p.vcls]||vmap.none;
+  const cur=(PRICE[p.symbol]?PRICE[p.symbol].bid:p.bid);
+  const crCls=p.ctr>=0?'pos':'neg', tCls=p.trend>=0?'up':'dn';
+  const risk=p.risk?`<div class="riskb">⚠ ${p.risk_note||'リスク注意'}</div>`:'';
+  return`<div class="card" style="animation-delay:${i*55}ms">
+    <div class="row"><span class="sym">${p.symbol.replace('_','/')}</span><span class="vchip ${vc}">${vt}</span></div>
+    <div class="row" style="margin-top:8px"><span class="price">${fmt(cur)}</span>
+      <div><div class="cr ${crCls}">C/R ${fmt(p.ctr,2)}</div><div class="crlab">金利差 ${p.diff>=0?'+':''}${fmt(p.diff)}%</div></div></div>
+    ${spark(p.closes||[],p.ema_f_series||[],p.ema_s_series||[])}
+    <div class="chips">
+      <span class="chip">スワップ方向 <b class="up">買い ${p.swap_sign}</b></span>
+      <span class="chip">年率ボラ <b>${fmt(p.vol)}%</b></span>
+      <span class="chip">トレンド <b class="${tCls}">${p.trend>=0?'+':''}${fmt(p.trend)}</b></span>
+      <span class="chip">ADX <b>${fmt(p.adx)}</b></span>
+      <span class="chip tp">TP <b>${fmt(p.tp_price)}</b> (${p.tp_pct>=0?'+':''}${fmt(p.tp_pct)}%)</span>
+      <span class="chip sl">SL <b>${fmt(p.sl_price)}</b> (${fmt(p.sl_pct)}%)</span>
+    </div>
+    <div class="reasons">${(p.reasons||[]).join(' ／ ')}</div>${risk}</div>`;
+}
+function render(){
+  if(!S)return;
+  $('#mkt').textContent=S.market_open?'● MARKET OPEN':'● MARKET CLOSED';
+  $('#mkt').className='badge '+(S.market_open?'open':'close');
+  $('#updated').textContent='更新 '+(S.generated_at||'—')+' ・'+(S.mode||'');
+  $('#asof').textContent='金利基準 '+(S.rate_asof||'—');
+  $('#ranking').innerHTML=(S.ranking||[]).map(rankRow).join('')||'<div class="rrow">データなし</div>';
+  $('#pairs').innerHTML=(S.pairs||[]).map(card).join('');
+  $('#foot').innerHTML='金利差・スワップは変動します。キャリー取引は急落(アンワインド)・新興国減価の尾部リスク大。表示は判断補助で利益・最適値を保証しません。自己責任で。';
+}
+
+/* ====== ライブ計算（4時間足をWorker経由で取得→画面側で再計算。Python版と一致） ====== */
+const CSYMS=["TRY_JPY","ZAR_JPY","MXN_JPY","HUF_JPY","NZD_JPY","CAD_JPY","SEK_JPY"];
+const CHART_POINTS=60, PERIODS_PER_YEAR=6*252;
+const W_EMA=0.40,W_MACD=0.30,W_RSI=0.15,W_BB=0.15,TREND_TH=0.25,SL_ATR=2.0,TP_ATR=3.0,HIGH_VOL_PCT=18.0;
+const RATES={JPY:0.75,TRY:40.0,ZAR:7.00,MXN:6.75,HUF:6.25,NZD:2.25,CAD:2.25,SEK:1.75};
+const EM=new Set(["TRY_JPY","ZAR_JPY","MXN_JPY","HUF_JPY"]);
+const CP={interval:'4hour',ema_f:21,ema_s:55,rsi:14,macd:[12,26,9],bb:[20,2.0],adx:14,atr:14};
+const cl=(x,lo=-1,hi=1)=>Math.max(lo,Math.min(hi,x)),rN=(x,n)=>x==null?null:Math.round(x*10**n)/10**n;
+function emaSeries(v,p){if(v.length<p)return Array(v.length).fill(null);const k=2/(p+1),o=Array(v.length).fill(null);let e=v.slice(0,p).reduce((a,b)=>a+b,0)/p;o[p-1]=e;for(let i=p;i<v.length;i++){e=v[i]*k+e*(1-k);o[i]=e;}return o;}
+function ema(v,p){const s=emaSeries(v,p);return s.length?s[s.length-1]:null;}
+function rsiC(v,p){if(v.length<p+1)return null;const d=[];for(let i=1;i<v.length;i++)d.push(v[i]-v[i-1]);const g=d.map(x=>Math.max(x,0)),l=d.map(x=>Math.max(-x,0));let ag=g.slice(0,p).reduce((a,b)=>a+b,0)/p,al=l.slice(0,p).reduce((a,b)=>a+b,0)/p;for(let i=p;i<d.length;i++){ag=(ag*(p-1)+g[i])/p;al=(al*(p-1)+l[i])/p;}return al===0?100:100-100/(1+ag/al);}
+function macdC(v,f,s,sig){const ef=emaSeries(v,f),es=emaSeries(v,s);const ml=v.map((_,i)=>(ef[i]!=null&&es[i]!=null)?ef[i]-es[i]:null);const vv=ml.filter(m=>m!=null);if(vv.length<sig+1)return null;const ss=emaSeries(vv,sig);if(ss[ss.length-1]==null||ss[ss.length-2]==null)return null;return[vv[vv.length-1],ss[ss.length-1],vv[vv.length-1]-ss[ss.length-1],vv[vv.length-2]-ss[ss.length-2]];}
+function bollC(v,p,k){if(v.length<p)return null;const w=v.slice(-p),mid=w.reduce((a,b)=>a+b,0)/p;const sd=Math.sqrt(w.reduce((a,b)=>a+(b-mid)**2,0)/p);return[mid,mid+k*sd,mid-k*sd,sd];}
+function atrC(o,p){if(o.length<p+1)return null;const tr=[];for(let i=1;i<o.length;i++){const h=o[i][0],l=o[i][1],pc=o[i-1][2];tr.push(Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc)));}let a=tr.slice(0,p).reduce((x,y)=>x+y,0)/p;for(let i=p;i<tr.length;i++)a=(a*(p-1)+tr[i])/p;return a;}
+function adxC(o,p){if(o.length<2*p+1)return null;const pdm=[],mdm=[],tr=[];for(let i=1;i<o.length;i++){const h=o[i][0],l=o[i][1],ph=o[i-1][0],pl=o[i-1][1],pc=o[i-1][2];const up=h-ph,dn=pl-l;pdm.push((up>dn&&up>0)?up:0);mdm.push((dn>up&&dn>0)?dn:0);tr.push(Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc)));}const w=arr=>{let s=arr.slice(0,p).reduce((a,b)=>a+b,0);const o2=[s];for(let i=p;i<arr.length;i++){s=s-s/p+arr[i];o2.push(s);}return o2;};const at=w(tr),pd=w(pdm),md=w(mdm);const pdi=at.map((x,i)=>x?100*pd[i]/x:0),mdi=at.map((x,i)=>x?100*md[i]/x:0);const dx=pdi.map((x,i)=>100*Math.abs(x-mdi[i])/((x+mdi[i])||1));let av;if(dx.length<p)av=dx.reduce((a,b)=>a+b,0)/dx.length;else{av=dx.slice(0,p).reduce((a,b)=>a+b,0)/p;for(let i=p;i<dx.length;i++)av=(av*(p-1)+dx[i])/p;}return[av,pdi[pdi.length-1],mdi[mdi.length-1]];}
+function annualVol(closes,n=120){const c=closes.slice(-(n+1));if(c.length<20)return null;const r=[];for(let i=1;i<c.length;i++){if(c[i-1]>0)r.push(Math.log(c[i]/c[i-1]));}if(r.length<10)return null;const m=r.reduce((a,b)=>a+b,0)/r.length;const sd=Math.sqrt(r.reduce((a,b)=>a+(b-m)**2,0)/(r.length-1));return sd*Math.sqrt(PERIODS_PER_YEAR)*100;}
+function carryEval(sym,o){const P=CP,closes=o.map(r=>r[2]);if(closes.length<Math.max(P.ema_s,P.macd[1],P.adx*2)+5)return null;
+  const price=closes[closes.length-1],ef=ema(closes,P.ema_f),es=ema(closes,P.ema_s),rv=rsiC(closes,P.rsi),md=macdC(closes,P.macd[0],P.macd[1],P.macd[2]),bb=bollC(closes,P.bb[0],P.bb[1]),a=atrC(o,P.atr),ax=adxC(o,P.adx),vol=annualVol(closes);
+  if([ef,es,rv,a,vol].some(x=>x==null)||!md||!bb||!ax)return null;
+  const adxv=ax[0],adxf=Math.max(cl(adxv/40,0,1),0.25);
+  let emaSig=cl((ef-es)/(a||1e-9)),macdSig=cl(md[2]/(0.6*(a||1e-9)));
+  if(md[2]>md[3])macdSig=cl(macdSig+0.1);else if(md[2]<md[3])macdSig=cl(macdSig-0.1);
+  const rsiSig=cl((rv-50)/50),bbSig=cl((price-bb[0])/(P.bb[1]*(bb[3]||1e-9)));
+  const trend=cl(W_EMA*emaSig*adxf+W_MACD*macdSig*adxf+W_RSI*rsiSig+W_BB*bbSig);
+  const foreign=sym.split('_')[0],diff=(RATES[foreign]||0)-RATES.JPY,ctr=diff/Math.max(vol,1e-9);
+  let verdict,vcls;
+  if(diff<=0){verdict='対象外';vcls='none';}
+  else if(trend>=TREND_TH){verdict='買い（順張り）';vcls='buy';}
+  else if(trend<=-TREND_TH){verdict='様子見（下落中）';vcls='wait';}
+  else{verdict='買い寄り（押し目検討）';vcls='soft';}
+  const sl=price-SL_ATR*a,tp=price+TP_ATR*a,atrp=a/price*100;
+  let risk=vol>=HIGH_VOL_PCT;const em=EM.has(sym);let note='';
+  if(sym==='TRY_JPY')note='超高金利＝急落・減価リスク特大。少額・長期前提で';else if(em)note='新興国通貨・尾部(急落)リスクあり';else if(risk)note='高ボラ';
+  risk=risk||em;
+  const reasons=[`金利差${diff>=0?'+':''}${rN(diff,2)}%`];
+  if(Math.abs(emaSig)>0.2)reasons.push(`EMA${emaSig>0?'上':'下'}(${P.ema_f}/${P.ema_s})`);
+  if(Math.abs(macdSig)>0.2)reasons.push(`MACD${md[2]>0?'+':'-'}`);
+  reasons.push(`RSI${Math.round(rv)}`);reasons.push(`ADX${Math.round(adxv)}`);
+  return {symbol:sym,price,rsi:rN(rv,1),adx:rN(adxv,1),atr:rN(a,4),atr_pct:rN(atrp,2),vol:rN(vol,1),
+    diff:rN(diff,2),foreign_rate:RATES[foreign],carry_dir:diff>=0?'買い':'売り',swap_sign:diff>=0?'+':'-',ctr:rN(ctr,3),
+    trend:rN(trend,3),verdict,vcls,risk,risk_note:note,tp_price:rN(tp,3),sl_price:rN(sl,3),tp_pct:rN((tp/price-1)*100,2),sl_pct:rN((sl/price-1)*100,2),reasons,
+    closes:closes.slice(-CHART_POINTS).map(x=>rN(x,3)),ema_f_series:emaSeries(closes,P.ema_f).slice(-CHART_POINTS).map(x=>rN(x,3)),ema_s_series:emaSeries(closes,P.ema_s).slice(-CHART_POINTS).map(x=>rN(x,3))};
+}
+// ライブLINE通知（Worker経由・買い順張りに転じた時のみ・連投防止）
+function notifyBase(){return LIVE_PRICE_URL.split('?')[0].replace(/\/$/,'');}
+function loadNotified(){try{return JSON.parse(localStorage.getItem('carry_notified'))||{}}catch(e){return{}}}
+function saveNotified(o){try{localStorage.setItem('carry_notified',JSON.stringify(o));}catch(e){}}
+async function notifyLive(text){if(!LIVE_PRICE_URL)return;try{await fetch(notifyBase()+'?action=notify'+(NOTIFY_KEY?('&key='+encodeURIComponent(NOTIFY_KEY)):''),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});}catch(e){}}
+function jstYear(off){return String(new Date().getFullYear()+off);}
+async function fetchK4(base,sym){let rows={};for(const off of [0,-1]){const path=`/public/v1/klines?symbol=${sym}&priceType=BID&interval=4hour&date=${jstYear(off)}`;
+  try{const r=await fetch(`${base}?path=${encodeURIComponent(path)}&last=260&t=${Date.now()}`,{cache:'no-store'});const j=await r.json();(j.data||[]).forEach(k=>{rows[+k.openTime]=[+k.high,+k.low,+k.close];});}catch(e){}
+  if(Object.keys(rows).length>=200)break;}
+  return Object.keys(rows).map(Number).sort((a,b)=>a-b).map(t=>rows[t]);}
+let CARRY_BUSY=false;
+async function liveCarry(){
+  if(!LIVE_PRICE_URL||!S||CARRY_BUSY)return;
+  CARRY_BUSY=true;const base=notifyBase();const notified=loadNotified();
+  try{
+    for(const sym of CSYMS){
+      const oh=await fetchK4(base,sym);if(oh.length<60)continue;
+      const ev=carryEval(sym,oh);if(!ev)continue;
+      ev.bid=PRICE[sym]?PRICE[sym].bid:ev.price;ev.ask=PRICE[sym]?PRICE[sym].ask:null;
+      const idx=S.pairs.findIndex(p=>p.symbol===sym);if(idx>=0)S.pairs[idx]=ev;else S.pairs.push(ev);
+      const rec=notified[sym],now=Date.now();
+      if(S.market_open&&ev.vcls==='buy'){
+        if((!rec||rec.v!=='buy')&&(!rec||now-rec.ts>1800000)){
+          const t=`⚡ライブ ${sym} ${ev.verdict}（キャリー）\n金利差 ${ev.diff>=0?'+':''}${ev.diff}%（${ev.foreign_rate}% vs JPY ${RATES.JPY}%）/ スワップ買いで${ev.swap_sign}\nトレンド${ev.trend>=0?'+':''}${ev.trend} / 年率ボラ${ev.vol}% / C/R${ev.ctr}${ev.risk?' ⚠'+(ev.risk_note||''):''}\n現在${ev.bid} / TP ${ev.tp_price}(${ev.tp_pct>=0?'+':''}${ev.tp_pct}%) / SL ${ev.sl_price}(${ev.sl_pct}%)`;
+          notifyLive(t);notified[sym]={v:'buy',ts:now};
+        }
+      }else if(rec&&rec.v==='buy'&&ev.vcls!=='buy'){notified[sym]={v:ev.vcls,ts:rec.ts};}
+    }
+    const rank=S.pairs.filter(p=>p.diff>0).slice().sort((a,b)=>b.ctr-a.ctr);
+    S.ranking=rank.map(p=>({symbol:p.symbol,diff:p.diff,ctr:p.ctr,vol:p.vol,trend:p.trend,verdict:p.verdict,vcls:p.vcls,risk:p.risk}));
+    saveNotified(notified);render();
+    $('#updated').textContent='更新 '+(S.generated_at||'—')+' ・● LIVE計算 '+new Date().toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour12:false});
+  }finally{CARRY_BUSY=false;}
+}
+
+async function load(){
+  try{const r=await fetch('carry_status.json?t='+Date.now(),{cache:'no-store'});S=await r.json();render();applyLive();liveCarry();}
+  catch(e){$('#updated').textContent='carry_status.json 読み込み失敗';}
+}
+async function applyLive(){
+  if(!LIVE_PRICE_URL)return;
+  try{const r=await fetch(LIVE_PRICE_URL.split('?')[0]+'?t='+Date.now(),{cache:'no-store'});const j=await r.json();
+    (j.data||[]).forEach(d=>{PRICE[d.symbol]={bid:+d.bid,ask:+d.ask};});render();
+    $('#updated').textContent='更新 '+(S?S.generated_at:'—')+' ・LIVE価格 '+new Date().toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour12:false});
+  }catch(e){}
+}
+load();setInterval(load,60000);if(LIVE_PRICE_URL){setInterval(applyLive,15000);setInterval(liveCarry,180000);}if('serviceWorker' in navigator){navigator.serviceWorker.register('carry-sw.js').catch(()=>{});}
+</script></body></html>
