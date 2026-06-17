@@ -1,0 +1,49 @@
+name: FX Carry Navi
+
+on:
+  schedule:
+    - cron: '5 * * * *'      # 毎時5分（スイング=4時間足なので1時間ごとで十分）
+  workflow_dispatch:
+    inputs:
+      test:
+        description: 'テスト通知を送る（LINE/メールの疎通確認）'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: carry-signal
+  cancel-in-progress: false
+
+jobs:
+  carry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install requests
+      - name: Run carry signal
+        env:
+          TEST_NOTIFY:               ${{ inputs.test }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          GMAIL_ADDRESS:             ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD:        ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO:                   ${{ secrets.MAIL_TO }}
+        run: python carry_signal.py
+      - name: Commit dashboard state
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add carry_status.json
+          if git diff --staged --quiet; then echo "no changes"; exit 0; fi
+          git commit -m "auto: update carry state [skip ci]"
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" \
+              && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            echo "push retry $i"; sleep 4
+          done
+          echo "push failed after retries"; exit 1
