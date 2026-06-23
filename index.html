@@ -85,6 +85,17 @@ const LIVE_PRICE_URL = "https://fx-navi.koheiomura5414.workers.dev";
 const NOTIFY_KEY = "高坂麗奈ちゃん";
 let S=null, PRICE={};
 const fmt=(x,d)=>x==null?'—':(d!=null?Number(x).toFixed(d):x);
+const fmtDur=h=>h==null?'—':(h<24?('約'+Math.round(h)+'時間'):('約'+(h/24).toFixed(1)+'日'));
+const yenS=v=>(v>=0?'+':'')+Math.round(v).toLocaleString('ja-JP')+'円';
+// スワップ(金利)収益の理論概算（1万通貨）。実付与額は業者・日々で変動・スプレッド/税別。
+function swapCalc(p){
+  const price=p.price; if(price==null||!(p.diff>0))return null;
+  const REF=10000, dayYen=price*REF*(p.diff/100)/365, dayPct=p.diff/365;
+  const o={dayYen:Math.round(dayYen)};
+  if(p.hold_tp_h){const days=p.hold_tp_h/24, swapYen=dayYen*days, priceYen=(p.tp_price-price)*REF;
+    o.comboYen=Math.round(priceYen+swapYen); o.comboPct=(p.tp_price/price-1)*100+dayPct*days;}
+  return o;
+}
 const vmap={buy:['v-buy','買い 順張り'],soft:['v-soft','買い寄り'],wait:['v-wait','様子見'],none:['v-none','対象外']};
 
 function spark(closes,ef,es){
@@ -110,6 +121,9 @@ function card(p,i){
   const cur=(PRICE[p.symbol]?PRICE[p.symbol].bid:p.bid);
   const crCls=p.ctr>=0?'pos':'neg', tCls=p.trend>=0?'up':'dn';
   const risk=p.risk?`<div class="riskb">⚠ ${p.risk_note||'リスク注意'}</div>`:'';
+  const stats=p.stats_n?`<span class="chip">⏱想定保有 利確<b class="up">${fmtDur(p.hold_tp_h)}</b>/損切<b class="dn">${fmtDur(p.hold_sl_h)}</b></span><span class="chip">📊TP勝率 <b>${p.tp_winrate}%</b>（${p.stats_n}回）</span>`:'';
+  const sw=swapCalc(p);
+  const swc=sw?`<span class="chip">💰スワップ概算 <b class="up">${yenS(sw.dayYen)}/日</b>（1万通貨）</span>`+(sw.comboYen!=null?`<span class="chip">価格+スワップ合算めやす 利確<b class="${sw.comboYen>=0?'up':'dn'}">${yenS(sw.comboYen)}</b>（${sw.comboPct>=0?'+':''}${sw.comboPct.toFixed(1)}%）</span>`:''):'';
   return`<div class="card" style="animation-delay:${i*55}ms">
     <div class="row"><span class="sym">${p.symbol.replace('_','/')}</span><span class="vchip ${vc}">${vt}</span></div>
     <div class="row" style="margin-top:8px"><span class="price">${fmt(cur)}</span>
@@ -122,6 +136,8 @@ function card(p,i){
       <span class="chip">ADX <b>${fmt(p.adx)}</b></span>
       <span class="chip tp">TP <b>${fmt(p.tp_price)}</b> (${p.tp_pct>=0?'+':''}${fmt(p.tp_pct)}%)</span>
       <span class="chip sl">SL <b>${fmt(p.sl_price)}</b> (${fmt(p.sl_pct)}%)</span>
+      ${stats}
+      ${swc}
     </div>
     <div class="reasons">${(p.reasons||[]).join(' ／ ')}</div>${risk}</div>`;
 }
@@ -133,7 +149,7 @@ function render(){
   $('#asof').textContent='金利基準 '+(S.rate_asof||'—');
   $('#ranking').innerHTML=(S.ranking||[]).map(rankRow).join('')||'<div class="rrow">データなし</div>';
   $('#pairs').innerHTML=(S.pairs||[]).map(card).join('');
-  $('#foot').innerHTML='金利差・スワップは変動します。キャリー取引は急落(アンワインド)・新興国減価の尾部リスク大。表示は判断補助で利益・最適値を保証しません。自己責任で。';
+  $('#foot').innerHTML='金利差・スワップは変動します。キャリー取引は急落(アンワインド)・新興国減価の尾部リスク大。スワップは金利差からの理論概算（業者の実付与額・スプレッド・税は別）。表示は判断補助で利益・最適値を保証しません。自己責任で。';
 }
 
 /* ====== ライブ計算（4時間足をWorker経由で取得→画面側で再計算。Python版と一致） ====== */
@@ -198,11 +214,15 @@ async function liveCarry(){
       const oh=await fetchK4(base,sym);if(oh.length<60)continue;
       const ev=carryEval(sym,oh);if(!ev)continue;
       ev.bid=PRICE[sym]?PRICE[sym].bid:ev.price;ev.ask=PRICE[sym]?PRICE[sym].ask:null;
-      const idx=S.pairs.findIndex(p=>p.symbol===sym);if(idx>=0)S.pairs[idx]=ev;else S.pairs.push(ev);
+      const idx=S.pairs.findIndex(p=>p.symbol===sym);
+      if(idx>=0){const old=S.pairs[idx];ev.tp_winrate=old.tp_winrate;ev.hold_tp_h=old.hold_tp_h;ev.hold_sl_h=old.hold_sl_h;ev.stats_n=old.stats_n;S.pairs[idx]=ev;}else S.pairs.push(ev);
       const rec=notified[sym],now=Date.now();
       if(S.market_open&&ev.vcls==='buy'){
         if((!rec||rec.v!=='buy')&&(!rec||now-rec.ts>1800000)){
-          const t=`⚡ライブ ${sym} ${ev.verdict}（キャリー）\n金利差 ${ev.diff>=0?'+':''}${ev.diff}%（${ev.foreign_rate}% vs JPY ${RATES.JPY}%）/ スワップ買いで${ev.swap_sign}\nトレンド${ev.trend>=0?'+':''}${ev.trend} / 年率ボラ${ev.vol}% / C/R${ev.ctr}${ev.risk?' ⚠'+(ev.risk_note||''):''}\n現在${ev.bid} / TP ${ev.tp_price}(${ev.tp_pct>=0?'+':''}${ev.tp_pct}%) / SL ${ev.sl_price}(${ev.sl_pct}%)`;
+          const stxt=ev.stats_n?`\n⏱想定保有 利確${fmtDur(ev.hold_tp_h)}/損切${fmtDur(ev.hold_sl_h)} / 📊TP勝率${ev.tp_winrate}%（${ev.stats_n}回）`:'';
+          const sw=swapCalc(ev);
+          const swtxt=sw?`\n💰スワップ概算(1万通貨) ${yenS(sw.dayYen)}/日`+(sw.comboYen!=null?` ・価格+スワップ合算めやす 利確${yenS(sw.comboYen)}（${sw.comboPct>=0?'+':''}${sw.comboPct.toFixed(1)}%）`:''):'';
+          const t=`⚡ライブ ${sym} ${ev.verdict}（キャリー）\n金利差 ${ev.diff>=0?'+':''}${ev.diff}%（${ev.foreign_rate}% vs JPY ${RATES.JPY}%）/ スワップ買いで${ev.swap_sign}\nトレンド${ev.trend>=0?'+':''}${ev.trend} / 年率ボラ${ev.vol}% / C/R${ev.ctr}${ev.risk?' ⚠'+(ev.risk_note||''):''}\n現在${ev.bid} / TP ${ev.tp_price}(${ev.tp_pct>=0?'+':''}${ev.tp_pct}%) / SL ${ev.sl_price}(${ev.sl_pct}%)`+stxt+swtxt;
           notifyLive(t);notified[sym]={v:'buy',ts:now};
         }
       }else if(rec&&rec.v==='buy'&&ev.vcls!=='buy'){notified[sym]={v:ev.vcls,ts:rec.ts};}
