@@ -216,42 +216,35 @@ def _median(a):
     s=sorted(a); n=len(s); m=n//2
     return s[m] if n%2 else (s[m-1]+s[m])/2.0
 
-def _trend_at(o_slice):
-    """与えた4h足スライスの最終バー時点のトレンドスコアとATRを返す（evaluateと同式）"""
-    closes=[r[2] for r in o_slice]
-    if len(closes) < max(P["ema_s"],P["macd"][1],P["adx"]*2)+5: return None
-    ef,es=ema(closes,P["ema_f"]),ema(closes,P["ema_s"])
-    rv=rsi(closes,P["rsi"]); md=macd(closes,*P["macd"]); bb=bollinger(closes,P["bb"][0],P["bb"][1])
-    a=atr(o_slice,P["atr"]); ax=adx(o_slice,P["adx"])
-    if None in (ef,es,rv,a) or md is None or bb is None or ax is None: return None
-    adxf=max(clamp(ax[0]/40,0,1),0.25)
-    ema_sig=clamp((ef-es)/(a if a else 1e-9))
-    macd_sig=clamp(md[2]/(0.6*a if a else 1e-9))
-    if md[2]>md[3]: macd_sig=clamp(macd_sig+0.1)
-    elif md[2]<md[3]: macd_sig=clamp(macd_sig-0.1)
-    rsi_sig=clamp((rv-50)/50.0)
-    bb_sig=clamp((closes[-1]-bb[0])/(P["bb"][1]*bb[3] if bb[3] else 1e-9))
-    trend=clamp(W_EMA*ema_sig*adxf+W_MACD*macd_sig*adxf+W_RSI*rsi_sig+W_BB*bb_sig)
-    return trend, a
+def atr_series(o, p):
+    """各バー時点のWilder ATR系列（インデックス揃え）。"""
+    n=len(o)
+    if n<p+1: return [None]*n
+    tr=[None]*n
+    for i in range(1,n):
+        h,l,_=o[i]; pc=o[i-1][2]; tr[i]=max(h-l,abs(h-pc),abs(l-pc))
+    out=[None]*n
+    a=sum(tr[1:p+1])/p; out[p]=a
+    for i in range(p+1,n):
+        a=(a*(p-1)+tr[i])/p; out[i]=a
+    return out
 
 def compute_carry_stats(o, diff):
-    """過去の『買い（順張り）』シグナル時点でロング→ATRのTP(+3)/SL(-2)のどちらに先に当たったかを集計。
-       TP勝率と、TP/SL到達までの中央値(本)を時間に換算して返す。"""
-    if diff is None or diff<=0 or len(o)<120: return None
-    n=len(o); start=max(120, n-STATS_WINDOW)
+    """キャリー＝ロング前提。各バーでロング→ATRのTP(+3)/SL(-2)のどちらに先に当たったかを集計。
+       TP勝率と、TP/SL到達までの中央値(本)を時間に換算して返す。同足はSL優先（保守的）。"""
+    if diff is None or diff<=0 or len(o)<60: return None
+    n=len(o); ats=atr_series(o, P["atr"]); start=max(P["atr"]+1, n-STATS_WINDOW)
     tp_bars=[]; sl_bars=[]
     for i in range(start, n-1):
-        tr=_trend_at(o[max(0,i-STATS_LOOKBACK):i+1])
-        if not tr: continue
-        trend,a=tr
-        if trend < TREND_TH or not a: continue          # 「買い（順張り）」成立時のみ検証
+        a=ats[i]
+        if not a: continue
         entry=o[i][2]; tp=entry+TP_ATR*a; sl=entry-SL_ATR*a
         for j in range(i+1, n):
             hi,lo,_=o[j]
-            if lo<=sl: sl_bars.append(j-i); break        # 同足はSL優先（保守的）
+            if lo<=sl: sl_bars.append(j-i); break
             if hi>=tp: tp_bars.append(j-i); break
     tot=len(tp_bars)+len(sl_bars)
-    if tot<5: return None                                # サンプル不足は表示しない
+    if tot<5: return None
     mt,ms=_median(tp_bars),_median(sl_bars)
     return {"tp_winrate":round(100*len(tp_bars)/tot),
             "hold_tp_h":round(mt*BAR_HOURS) if mt is not None else None,
@@ -266,7 +259,7 @@ def fmt_dur(h):
 # ---------- スワップ（金利）収益の理論概算 ----------
 REF_UNITS = 10000   # 概算の基準数量（1万通貨）
 
-def swap_estimate(price, diff, hold_tp_h, tp_price):
+def swap_estimate(price, diff, hold_tp_h, tp_price, sl_price=None):
     """金利差ベースの理論スワップ概算（1万通貨）。
        ⚠ 実際のスワップ付与額は業者・日々で変動し、スプレッド/税は別。あくまで目安。"""
     if price is None or diff is None or diff <= 0: return None
@@ -284,6 +277,12 @@ def swap_estimate(price, diff, hold_tp_h, tp_price):
             "combo_tp_yen": round(price_yen + swap_yen),
             "combo_tp_pct": round(((tp_price/price-1)*100 if tp_price else 0.0) + day_pct*days, 2),
         })
+    # 損切り1回分(1万通貨)をスワップで回収するのに必要な日数
+    if sl_price is not None and day_yen > 0:
+        sl_loss_yen = (price - sl_price) * REF_UNITS
+        if sl_loss_yen > 0:
+            out["sl_loss_yen"] = round(sl_loss_yen)
+            out["be_days"] = round(sl_loss_yen / day_yen, 1)
     return out
 
 
@@ -297,7 +296,7 @@ def build_status(ticker, market_open):
         if st:
             ev["tp_winrate"]=st["tp_winrate"]; ev["hold_tp_h"]=st["hold_tp_h"]
             ev["hold_sl_h"]=st["hold_sl_h"]; ev["stats_n"]=st["n"]
-        sw=swap_estimate(ev["price"], ev["diff"], ev.get("hold_tp_h"), ev["tp_price"])
+        sw=swap_estimate(ev["price"], ev["diff"], ev.get("hold_tp_h"), ev["tp_price"], ev["sl_price"])
         if sw: ev.update(sw)
         pairs.append(ev)
         if market_open and ev["vcls"]=="buy":
@@ -309,6 +308,9 @@ def build_status(ticker, market_open):
                 if ev.get("combo_tp_yen") is not None:
                     swtxt+=(f"・利確までスワップ約{ev['swap_tp_yen']:+,}円"
                             f"\n  → 価格+スワップ 合算めやす 約{ev['combo_tp_yen']:+,}円（{ev['combo_tp_pct']:+.1f}%）")
+                if ev.get("be_days") is not None:
+                    swtxt+=(f"\n  ⚖ 損切り1回(約{ev['sl_loss_yen']:,}円/1万)をスワップで回収=約{ev['be_days']}日"
+                            f"（価格リスク≫金利。回収日数が長いほど要注意）")
             notify.append(f"🟢 {sym} {ev['verdict']}（キャリー）\n"
                           f"  金利差 {ev['diff']:+.2f}%（{ev['foreign_rate']}% vs JPY {POLICY_RATES['JPY']}%）/ スワップ方向: 買いで{ev['swap_sign']}\n"
                           f"  トレンド{ev['trend']:+.2f} / 年率ボラ{ev['vol']:.1f}% / キャリー対リスク{ev['ctr']:.2f}{' ⚠高ボラ' if ev['risk'] else ''}\n"
