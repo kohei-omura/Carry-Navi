@@ -57,6 +57,28 @@ h1{font-family:'Shippori Mincho',serif;font-weight:700;font-size:25px;margin:0;l
 border:1px solid var(--line);background:transparent;color:var(--mut);cursor:pointer;margin-top:6px}
 .mute.off{color:var(--down);border-color:rgba(255,122,138,.4)}
 .mute:focus-visible{outline:1px solid var(--gold);outline-offset:2px}
+/* ── 追加：通知設定パネル ── */
+.ncfg{background:var(--card2);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:4px}
+.ncfg summary{list-style:none;cursor:pointer;padding:12px 14px;font-family:var(--mono);font-size:12px;
+letter-spacing:.1em;color:var(--ink);display:flex;align-items:center;gap:9px}
+.ncfg summary::-webkit-details-marker{display:none}
+.ncfg summary::before{content:"▼";color:var(--gold);font-size:10px;transition:transform .2s}
+.ncfg[open] summary::before{transform:rotate(180deg)}
+.nstate{margin-left:auto;font-size:11px;letter-spacing:.04em;color:var(--mut)}
+.nstate.on{color:var(--up)} .nstate.off{color:var(--down)}
+.ncfgbody{padding:2px 14px 14px;border-top:1px solid var(--line)}
+.nchk{display:flex;align-items:center;gap:10px;padding:12px 0;cursor:pointer;font-size:14px}
+.nchk input{width:21px;height:21px;accent-color:var(--gold);flex:none}
+.nrow{display:flex;align-items:center;gap:10px;padding-bottom:10px}
+.nrow label{font-size:11px;color:var(--mut);letter-spacing:.08em}
+.nrow select{flex:1;background:#0a0e14;border:1px solid var(--line);color:var(--ink);border-radius:8px;
+padding:7px 8px;font-family:var(--mono);font-size:12px}
+.njson{margin:0 0 10px;background:#0a0e14;border:1px solid var(--line);border-radius:8px;padding:9px 10px;
+font-family:var(--mono);font-size:11px;color:var(--soft);white-space:pre-wrap;word-break:break-all}
+.nbtns{display:flex;gap:8px}
+.nbtn{flex:1;text-align:center;text-decoration:none;font-family:var(--mono);font-size:12px;padding:10px 8px;
+border-radius:999px;border:1px solid var(--line);background:#0a0e14;color:var(--ink);cursor:pointer}
+.nbtn.go{background:linear-gradient(90deg,var(--gold),var(--soft));color:#0a0c10;border:0;font-weight:700}
 /* ── 追加：保有ポジション ── */
 .posbox{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:13px}
 .pf{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -84,9 +106,31 @@ border:0;border-radius:999px;padding:9px;font-weight:700;font-size:13px;cursor:p
     <text x="50" y="45" text-anchor="middle" dominant-baseline="middle" font-family="Arial,sans-serif" font-weight="900" font-size="38" fill="url(#lg)">¥</text>
    </svg>
    <div><h1>FX キャリーナビ</h1><div class="sub">CARRY · SWAP · SWING 4H</div></div></div>
-  <div class="hr"><span id="mkt" class="badge">―</span><div id="updated">読み込み中…</div><div id="asof"></div>
-   <button id="muteBtn" class="mute" type="button">🔔 通知ON</button></div>
+  <div class="hr"><span id="mkt" class="badge">―</span><div id="updated">読み込み中…</div><div id="asof"></div></div>
 </header>
+
+<details class="ncfg" id="ncfg">
+  <summary>通知設定 <span class="nstate" id="ncfgState">確認中…</span></summary>
+  <div class="ncfgbody">
+    <label class="nchk"><input type="checkbox" id="notifyOn"><span>シグナル通知を受け取る</span></label>
+    <div class="nrow" id="untilRow">
+      <label>止める期間</label>
+      <select id="muteHours">
+        <option value="0">解除するまで</option>
+        <option value="1">1時間</option>
+        <option value="6">6時間</option>
+        <option value="24">24時間</option>
+        <option value="72">3日間</option>
+      </select>
+    </div>
+    <pre class="njson" id="njson"></pre>
+    <div class="nbtns">
+      <button type="button" class="nbtn" id="njsonCopy">JSONをコピー</button>
+      <a class="nbtn go" id="njsonEdit" href="#" target="_blank" rel="noopener">GitHubで反映する</a>
+    </div>
+    <div class="reasons">チェックを変える → JSONをコピー → 「GitHubで反映する」で開いた画面に貼り付けて Commit、で確定します。</div>
+  </div>
+</details>
 
 <div class="sec">金利差ランキング（キャリー対リスク順）</div>
 <div class="rank" id="ranking"></div>
@@ -116,71 +160,67 @@ const $=s=>document.querySelector(s);
 const LIVE_PRICE_URL = "";
 // WorkerにNOTIFY_KEYを設定した場合のみ同じ値を（任意・FX Naviと共用可）
 const NOTIFY_KEY = "";
-// 通知ミュートをサーバー側と共有する場合のWorker URL（例 https://xxx.workers.dev）。空ならこの端末だけ停止
-const MUTE_API = "";
-// Actions方式で使う notify_mute.json の編集ページ（Worker未使用時のボタン遷移先）
-const MUTE_EDIT_URL = "https://github.com/kohei-omura/Carry-Navi/edit/main/notify_mute.json";
 let S=null, PRICE={};
 const fmt=(x,d)=>x==null?'—':(d!=null?Number(x).toFixed(d):x);
 const vmap={buy:['v-buy','買い 順張り'],soft:['v-soft','買い寄り'],wait:['v-wait','様子見'],none:['v-none','対象外']};
 
-/* ====== 通知ミュート（ON → 1時間停止 → 解除するまで停止 → ON） ====== */
-const MUTE_KEY='carry_mute';
-let MUTE_SYNC=null; // true=サーバー同期済 / false=同期失敗 / null=ローカルのみ
-let SRV_MUTE=null;  // notify_mute.json の中身（Actions方式）
-function muteBase(){return MUTE_API.split('?')[0].replace(/\/$/,'');}
-function muteUntil(){try{return Number(localStorage.getItem(MUTE_KEY)||0)}catch(e){return 0}}
-function isMuted(){const u=muteUntil();return u===-1||u>Date.now();}
-async function pushMute(v){
-  if(!MUTE_API){MUTE_SYNC=null;return;}
-  try{const r=await fetch(muteBase()+'?action=mute&until='+v+(NOTIFY_KEY?('&key='+encodeURIComponent(NOTIFY_KEY)):''),{method:'POST'});MUTE_SYNC=r.ok;}
-  catch(e){MUTE_SYNC=false;}
-  renderMute();
-}
-async function pullMute(){
-  if(MUTE_API){
-    try{const r=await fetch(muteBase()+'?action=mute-status&t='+Date.now(),{cache:'no-store'});const j=await r.json();
-      if(j&&j.until!==undefined){localStorage.setItem(MUTE_KEY,String(j.until));MUTE_SYNC=true;}}
-    catch(e){MUTE_SYNC=false;}
-    renderMute();return;
-  }
-  try{const r=await fetch('notify_mute.json?t='+Date.now(),{cache:'no-store'});SRV_MUTE=await r.json();}
-  catch(e){SRV_MUTE=null;}
-  renderMute();
-}
+/* ====== 通知設定（notify_mute.json をサーバーの正とする） ====== */
+let SRV_MUTE=null;      // notify_mute.json の中身
+let SRV_LOADED=false;
+const REPO_EDIT_URL="https://github.com/kohei-omura/Carry-Navi/edit/main/notify_mute.json";
+const REPO_NEW_URL ="https://github.com/kohei-omura/Carry-Navi/new/main?filename=notify_mute.json";
+
 function srvMuted(){
   if(!SRV_MUTE||!SRV_MUTE.muted)return false;
   if(!SRV_MUTE.until)return true;
   const t=Date.parse(SRV_MUTE.until);
   return isNaN(t)?true:Date.now()<t;
 }
-function setMute(v){try{localStorage.setItem(MUTE_KEY,String(v))}catch(e){}renderMute();pushMute(v);}
-function renderMute(){
-  const b=$('#muteBtn');if(!b)return;
-  if(!MUTE_API){ // Actions方式：notify_mute.json の状態を表示し、タップで編集ページへ
-    if(SRV_MUTE===null){b.textContent='通知状態 取得中…';b.className='mute';return;}
-    if(srvMuted()){b.textContent='🔕 通知停止中'+(SRV_MUTE.until?('〜'+String(SRV_MUTE.until).slice(0,16).replace('T',' ')):'（無期限）');b.className='mute off';}
-    else{b.textContent='🔔 通知ON ・タップで停止';b.className='mute';}
-    return;
-  }
-  const u=muteUntil();
-  const tag=MUTE_SYNC===false?' ·同期失敗':(MUTE_SYNC?'':' ·同期中');
-  if(u===-1){b.textContent='🔕 通知OFF'+tag;b.className='mute off';}
-  else if(u>Date.now()){b.textContent='🔕 '+new Date(u).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})+'まで停止'+tag;b.className='mute off';}
-  else{b.textContent='🔔 通知ON'+tag;b.className='mute';}
+function isoJST(ms){return new Date(ms+9*3600e3).toISOString().slice(0,19)+'+09:00';}
+
+/* チェックボックスの状態から、書き込むべきJSONを組み立てる */
+function muteJson(){
+  const on=$('#notifyOn').checked;
+  if(on)return{muted:false,until:null};
+  const h=Number($('#muteHours').value||0);
+  return{muted:true,until:h?isoJST(Date.now()+h*3600e3):null};
 }
-function cycleMute(){
-  if(!MUTE_API){window.open(MUTE_EDIT_URL,'_blank','noopener');return;}
-  const u=muteUntil();
-  if(!isMuted())setMute(Date.now()+3600e3);
-  else if(u!==-1)setMute(-1);
-  else setMute(0);
+function renderNotifyCfg(){
+  const st=$('#ncfgState'),chk=$('#notifyOn');if(!st||!chk)return;
+  if(!SRV_LOADED){st.textContent='確認中…';st.className='nstate';return;}
+  if(SRV_MUTE===null){st.textContent='未設定（通知ON）';st.className='nstate on';}
+  else if(srvMuted()){
+    st.textContent='🔕 停止中'+(SRV_MUTE.until?' 〜'+String(SRV_MUTE.until).slice(5,16).replace('T',' '):'（無期限）');
+    st.className='nstate off';
+  }else{st.textContent='🔔 受信中';st.className='nstate on';}
+  $('#untilRow').style.display=chk.checked?'none':'flex';
+  const j=JSON.stringify(muteJson(),null,2);
+  $('#njson').textContent=j;
+  $('#njsonEdit').href=(SRV_MUTE===null)
+    ? REPO_NEW_URL+'&value='+encodeURIComponent(j)
+    : REPO_EDIT_URL;
 }
-function cycleMute(){const u=muteUntil();
-  if(!isMuted())setMute(Date.now()+3600e3);
-  else if(u!==-1)setMute(-1);
-  else setMute(0);
+async function pullMute(){
+  try{
+    const r=await fetch('notify_mute.json?t='+Date.now(),{cache:'no-store'});
+    SRV_MUTE=r.ok?await r.json():null;
+  }catch(e){SRV_MUTE=null;}
+  SRV_LOADED=true;
+  $('#notifyOn').checked=!srvMuted();
+  renderNotifyCfg();
 }
+function initNotifyCfg(){
+  $('#notifyOn').addEventListener('change',renderNotifyCfg);
+  $('#muteHours').addEventListener('change',renderNotifyCfg);
+  $('#njsonCopy').addEventListener('click',async()=>{
+    const t=$('#njson').textContent,b=$('#njsonCopy');
+    try{await navigator.clipboard.writeText(t);b.textContent='コピーしました';}
+    catch(e){b.textContent='長押しで選択してコピー';}
+    setTimeout(()=>{b.textContent='JSONをコピー';},1800);
+  });
+  renderNotifyCfg();pullMute();
+}
+
 
 /* ====== 想定到達日数：σ·√D + s·D = 距離 を D について解く ======
    σ=日次ボラ(価格), s=金利差ドリフト(価格/日)。損切り側はドリフトが逆に効く。 */
@@ -364,7 +404,7 @@ function carryEval(sym,o){const P=CP,closes=o.map(r=>r[2]);if(closes.length<Math
 function notifyBase(){return LIVE_PRICE_URL.split('?')[0].replace(/\/$/,'');}
 function loadNotified(){try{return JSON.parse(localStorage.getItem('carry_notified'))||{}}catch(e){return{}}}
 function saveNotified(o){try{localStorage.setItem('carry_notified',JSON.stringify(o));}catch(e){}}
-async function notifyLive(text){if(!LIVE_PRICE_URL||isMuted())return;try{await fetch(notifyBase()+'?action=notify'+(NOTIFY_KEY?('&key='+encodeURIComponent(NOTIFY_KEY)):''),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});}catch(e){}}
+async function notifyLive(text){if(!LIVE_PRICE_URL||srvMuted())return;try{await fetch(notifyBase()+'?action=notify'+(NOTIFY_KEY?('&key='+encodeURIComponent(NOTIFY_KEY)):''),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});}catch(e){}}
 function jstYear(off){return String(new Date().getFullYear()+off);}
 async function fetchK4(base,sym){let rows={};for(const off of [0,-1]){const path=`/public/v1/klines?symbol=${sym}&priceType=BID&interval=4hour&date=${jstYear(off)}`;
   try{const r=await fetch(`${base}?path=${encodeURIComponent(path)}&last=260&t=${Date.now()}`,{cache:'no-store'});const j=await r.json();(j.data||[]).forEach(k=>{rows[+k.openTime]=[+k.high,+k.low,+k.close];});}catch(e){}
@@ -406,6 +446,6 @@ async function applyLive(){
     $('#updated').textContent='更新 '+(S?S.generated_at:'—')+' ・LIVE価格 '+new Date().toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour12:false});
   }catch(e){}
 }
-$('#muteBtn').onclick=cycleMute;renderMute();pullMute();initPos();
+initNotifyCfg();initPos();
 load();setInterval(load,60000);if(LIVE_PRICE_URL){setInterval(applyLive,15000);setInterval(liveCarry,180000);}if('serviceWorker' in navigator){navigator.serviceWorker.register('carry-sw.js').catch(()=>{});}
 </script></body></html>
