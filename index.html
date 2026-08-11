@@ -79,6 +79,16 @@ font-family:var(--mono);font-size:11px;color:var(--soft);white-space:pre-wrap;wo
 .nbtn{flex:1;text-align:center;text-decoration:none;font-family:var(--mono);font-size:12px;padding:10px 8px;
 border-radius:999px;border:1px solid var(--line);background:#0a0e14;color:var(--ink);cursor:pointer}
 .nbtn.go{background:linear-gradient(90deg,var(--gold),var(--soft));color:#0a0c10;border:0;font-weight:700}
+/* ── 追加：推奨数量 ── */
+.sizebox{margin-top:11px;font-family:var(--mono);font-size:12px;color:var(--ink);
+background:rgba(205,168,106,.06);border:1px solid rgba(205,168,106,.28);border-radius:10px;padding:9px 11px;line-height:1.75}
+.sizebox b{color:var(--gold);font-size:14px}
+.sizebox small{display:block;color:var(--mut);font-size:10.5px;margin-top:2px}
+.sizebox small.kel{color:var(--soft)}
+.sizebox small b{font-size:11px}
+.sizebox small b.up{color:var(--up)}.sizebox small b.dn{color:var(--down)}
+.sizebox.warn{background:rgba(255,122,138,.07);border-color:rgba(255,122,138,.3)}
+.sizebox.warn b{color:var(--down)}
 /* ── 追加：保有ポジション ── */
 .posbox{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:13px}
 .pf{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -135,6 +145,16 @@ border:0;border-radius:999px;padding:9px;font-weight:700;font-size:13px;cursor:p
 <div class="sec">金利差ランキング（キャリー対リスク順）</div>
 <div class="rank" id="ranking"></div>
 <div class="note">C/R＝金利差 ÷ 年率ボラ。高いほど「金利差のわりに値動きが穏やか」。ただしC/Rは過去ボラ基準で、新興国の急落・減価(尾部)リスクは測りきれません。</div>
+
+<div class="sec">資金とリスク</div>
+<div class="posbox">
+  <div class="pf">
+    <div><label>資金（円）</label><input id="cfEq" type="number" inputmode="numeric" step="any"></div>
+    <div><label>リスク（%）</label><input id="cfRisk" type="number" inputmode="decimal" step="0.1"></div>
+    <div><label>レバレッジ（倍）</label><input id="cfLev" type="number" inputmode="numeric" step="1"></div>
+  </div>
+  <div class="reasons" style="margin-top:9px">必要証拠金は各ペアの価格から自動計算し、<b>リスク基準</b>（資金×リスク%÷SL幅）と<b>証拠金上限基準</b>（資金×レバ÷価格）の小さい方を推奨数量とします。入力はこの端末にのみ保存されます。</div>
+</div>
 
 <div class="sec">ペア別シグナル</div>
 <div id="pairs"></div>
@@ -242,7 +262,54 @@ function fmtHold(h){return h==null?null:(h<24?'約'+h+'時間':'約'+(h/24).toFi
 const tpHold=p=>fmtHold(p.hold_tp_h)||(fmtD(daysTo(p.tp_price-p.price,sigDaily(p),driftDaily(p),true))+' 推定');
 const slHold=p=>fmtHold(p.hold_sl_h)||(fmtD(daysTo(p.price-p.sl_price,sigDaily(p),driftDaily(p),false))+' 推定');
 
-/* ====== 保有ポジション ====== */
+/* ====== 資金・リスク・レバから推奨数量を算出 ====== */
+const CFG_KEY='carry_cfg';
+const CFG_DEF={eq:100000,risk:2,lev:25};
+let CFG={...CFG_DEF};
+function cfgLoad(){try{CFG={...CFG_DEF,...(JSON.parse(localStorage.getItem(CFG_KEY))||{})}}catch(e){CFG={...CFG_DEF}}}
+function cfgSave(){try{localStorage.setItem(CFG_KEY,JSON.stringify(CFG))}catch(e){}}
+const yen=n=>'¥'+Math.round(n).toLocaleString();
+
+/* 1/4ケリー（TP勝率と、そのペアのリスクリワードから）。上限は入力したリスク% */
+function kellyRisk(p){
+  if(p.tp_winrate==null||p.tp_pct==null||!p.sl_pct)return null;
+  const b=Math.abs(p.tp_pct)/Math.abs(p.sl_pct);
+  const w=p.tp_winrate/100, f=w-(1-w)/b;
+  return f<=0?0:Math.min(CFG.risk, f*100/4);
+}
+function sizing(p){
+  const eq=Number(CFG.eq)||0, lev=Number(CFG.lev)||1;
+  const slDist=(p.price!=null&&p.sl_price!=null)?p.price-p.sl_price:null;   // 円／1通貨
+  if(!eq||!slDist||slDist<=0||!p.price)return null;
+  const kr=kellyRisk(p), useRisk=(kr!=null?kr:Number(CFG.risk))/100;
+  const byRisk=eq*useRisk/slDist;          // リスク基準（通貨数）
+  const byMargin=eq*lev/p.price;           // 証拠金上限基準（通貨数）
+  const units=Math.floor(Math.min(byRisk,byMargin)/1000)*1000;
+  return {units, base:byRisk<=byMargin?'リスク基準':'証拠金上限基準',
+    marginK:p.price*1000/lev, riskYen:units*slDist, riskPct:eq?units*slDist/eq*100:0,
+    slPips:slDist/0.01, useRisk:useRisk*100, kelly:kr,
+    swapDay:p.swap_day_yen!=null?p.swap_day_yen*units/10000:null};
+}
+function sizeBox(p){
+  const s=sizing(p);
+  if(!s)return'';
+  if(s.kelly===0)return`<div class="sizebox warn">💴 推奨数量 <b>見送り</b>
+    <small>TP勝率${p.tp_winrate}%・RR${(Math.abs(p.tp_pct)/Math.abs(p.sl_pct)).toFixed(2)} ではケリー基準が0以下（期待値マイナス）です</small></div>`;
+  if(s.units<1000)return`<div class="sizebox warn">💴 推奨数量 <b>0通貨</b>
+    <small>資金に対しSL幅が広すぎます（1,000通貨でもリスク ${yen(1000*(p.price-p.sl_price))}）</small></div>`;
+  return`<div class="sizebox">💴 推奨数量 <b>${s.units.toLocaleString()}通貨</b>
+    <small>（${s.base} ／ 必要証拠金 ${yen(s.marginK)}/千通貨 ／ リスク ${yen(s.riskYen)}＝資金${s.riskPct.toFixed(1)}% ／ SL ${s.slPips.toFixed(1)}p）</small>
+    ${s.kelly!=null?`<small class="kel">🎯 適用リスク ${s.useRisk.toFixed(2)}%（1/4ケリー・上限${CFG.risk}%）</small>`:''}
+    ${s.swapDay!=null?`<small class="kel">💰 この数量のスワップ概算 <b class="${s.swapDay>=0?'up':'dn'}">${s.swapDay>=0?'+':''}${Math.round(s.swapDay).toLocaleString()}円/日</b></small>`:''}
+  </div>`;
+}
+function initCfg(){
+  cfgLoad();
+  const bind=(id,key,dec)=>{const el=$(id);el.value=CFG[key];
+    el.addEventListener('input',()=>{const v=Number(el.value);if(!isNaN(v)&&v>0){CFG[key]=dec?v:Math.round(v);cfgSave();render();}});};
+  bind('#cfEq','eq');bind('#cfRisk','risk',true);bind('#cfLev','lev');
+}
+
 const POS_KEY='carry_positions';
 function posLoad(){try{return JSON.parse(localStorage.getItem(POS_KEY))||[]}catch(e){return[]}}
 function posSave(a){try{localStorage.setItem(POS_KEY,JSON.stringify(a))}catch(e){}renderPos();}
@@ -343,7 +410,7 @@ function card(p,i){
       ${p.combo_tp_yen!=null?`<span class="chip">価格+スワップ <b class="${p.combo_tp_yen>=0?'up':'dn'}">${p.combo_tp_yen>=0?'+':''}${p.combo_tp_yen.toLocaleString()}円</b></span>`:''}
       ${p.be_days!=null?`<span class="chip">SL1回の回収 <b>${p.be_days}日</b></span>`:''}
     </div>
-    <div class="reasons">${(p.reasons||[]).join(' ／ ')}</div>${risk}</div>`;
+    <div class="reasons">${(p.reasons||[]).join(' ／ ')}</div>${sizeBox(p)}${risk}</div>`;
 }
 function render(){
   if(!S)return;
@@ -446,6 +513,6 @@ async function applyLive(){
     $('#updated').textContent='更新 '+(S?S.generated_at:'—')+' ・LIVE価格 '+new Date().toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour12:false});
   }catch(e){}
 }
-initNotifyCfg();initPos();
+initNotifyCfg();initCfg();initPos();
 load();setInterval(load,60000);if(LIVE_PRICE_URL){setInterval(applyLive,15000);setInterval(liveCarry,180000);}if('serviceWorker' in navigator){navigator.serviceWorker.register('carry-sw.js').catch(()=>{});}
 </script></body></html>
