@@ -52,6 +52,25 @@ h1{font-family:'Shippori Mincho',serif;font-weight:700;font-size:25px;margin:0;l
 .spark{margin-top:12px}
 .foot{color:var(--mut);font-size:10.5px;line-height:1.8;text-align:center;margin-top:18px;font-family:var(--mono)}
 .card{animation:fade .5s both}@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+/* ── 追加：通知トグル ── */
+.mute{font-family:var(--mono);font-size:10px;letter-spacing:.06em;padding:4px 9px;border-radius:999px;
+border:1px solid var(--line);background:transparent;color:var(--mut);cursor:pointer;margin-top:6px}
+.mute.off{color:var(--down);border-color:rgba(255,122,138,.4)}
+.mute:focus-visible{outline:1px solid var(--gold);outline-offset:2px}
+/* ── 追加：保有ポジション ── */
+.posbox{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:13px}
+.pf{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pf .full{grid-column:1/-1}
+.pf label{font-size:9.5px;color:var(--mut);letter-spacing:.1em;display:block;margin-bottom:3px}
+.pf input,.pf select{width:100%;background:#0a0e14;border:1px solid var(--line);color:var(--ink);
+border-radius:8px;padding:7px 8px;font-family:var(--mono);font-size:12px}
+.padd{width:100%;margin-top:10px;background:linear-gradient(90deg,var(--gold),var(--soft));color:#0a0c10;
+border:0;border-radius:999px;padding:9px;font-weight:700;font-size:13px;cursor:pointer}
+.prow{border-top:1px solid var(--line);padding:12px 0}
+.prow:first-child{border-top:0}
+.pdel{background:none;border:0;color:var(--mut);font-size:16px;cursor:pointer;padding:0 4px}
+.pnl{font-family:var(--mono);font-size:20px;font-weight:600}
+.pnl.up{color:var(--up)}.pnl.dn{color:var(--down)}
 </style></head>
 <body><div class="wrap">
 <header>
@@ -65,7 +84,8 @@ h1{font-family:'Shippori Mincho',serif;font-weight:700;font-size:25px;margin:0;l
     <text x="50" y="45" text-anchor="middle" dominant-baseline="middle" font-family="Arial,sans-serif" font-weight="900" font-size="38" fill="url(#lg)">¥</text>
    </svg>
    <div><h1>FX キャリーナビ</h1><div class="sub">CARRY · SWAP · SWING 4H</div></div></div>
-  <div class="hr"><span id="mkt" class="badge">―</span><div id="updated">読み込み中…</div><div id="asof"></div></div>
+  <div class="hr"><span id="mkt" class="badge">―</span><div id="updated">読み込み中…</div><div id="asof"></div>
+   <button id="muteBtn" class="mute" type="button">🔔 通知ON</button></div>
 </header>
 
 <div class="sec">金利差ランキング（キャリー対リスク順）</div>
@@ -75,6 +95,19 @@ h1{font-family:'Shippori Mincho',serif;font-weight:700;font-size:25px;margin:0;l
 <div class="sec">ペア別シグナル</div>
 <div id="pairs"></div>
 
+<div class="sec">保有ポジション</div>
+<div class="posbox">
+  <div class="pf">
+    <div><label>ペア</label><select id="pfSym"></select></div>
+    <div><label>建値</label><input id="pfEntry" type="number" inputmode="decimal" step="any"></div>
+    <div><label>数量（万通貨）</label><input id="pfLot" type="number" inputmode="decimal" step="any" value="1"></div>
+    <div class="full"><label>建玉日</label><input id="pfDate" type="date"></div>
+  </div>
+  <button class="padd" id="pfAdd" type="button">ポジションを追加</button>
+  <div id="poslist" style="margin-top:4px"></div>
+</div>
+<div class="note">想定日数は carry_status.json の実測値（直近シグナルでTP/SLどちらに先に当たったかの中央値）。データが無いペアのみ「値動き＝拡散＋金利差ドリフト」モデルで推定し「推定」と表示します。スワップは金利差からの理論概算で、実際の付与額とは異なります。</div>
+
 <div class="foot" id="foot"></div>
 </div>
 <script>
@@ -83,9 +116,150 @@ const $=s=>document.querySelector(s);
 const LIVE_PRICE_URL = "";
 // WorkerにNOTIFY_KEYを設定した場合のみ同じ値を（任意・FX Naviと共用可）
 const NOTIFY_KEY = "";
+// 通知ミュートをサーバー側と共有する場合のWorker URL（例 https://xxx.workers.dev）。空ならこの端末だけ停止
+const MUTE_API = "";
+// Actions方式で使う notify_mute.json の編集ページ（Worker未使用時のボタン遷移先）
+const MUTE_EDIT_URL = "https://github.com/kohei-omura/Carry-Navi/edit/main/notify_mute.json";
 let S=null, PRICE={};
 const fmt=(x,d)=>x==null?'—':(d!=null?Number(x).toFixed(d):x);
 const vmap={buy:['v-buy','買い 順張り'],soft:['v-soft','買い寄り'],wait:['v-wait','様子見'],none:['v-none','対象外']};
+
+/* ====== 通知ミュート（ON → 1時間停止 → 解除するまで停止 → ON） ====== */
+const MUTE_KEY='carry_mute';
+let MUTE_SYNC=null; // true=サーバー同期済 / false=同期失敗 / null=ローカルのみ
+let SRV_MUTE=null;  // notify_mute.json の中身（Actions方式）
+function muteBase(){return MUTE_API.split('?')[0].replace(/\/$/,'');}
+function muteUntil(){try{return Number(localStorage.getItem(MUTE_KEY)||0)}catch(e){return 0}}
+function isMuted(){const u=muteUntil();return u===-1||u>Date.now();}
+async function pushMute(v){
+  if(!MUTE_API){MUTE_SYNC=null;return;}
+  try{const r=await fetch(muteBase()+'?action=mute&until='+v+(NOTIFY_KEY?('&key='+encodeURIComponent(NOTIFY_KEY)):''),{method:'POST'});MUTE_SYNC=r.ok;}
+  catch(e){MUTE_SYNC=false;}
+  renderMute();
+}
+async function pullMute(){
+  if(MUTE_API){
+    try{const r=await fetch(muteBase()+'?action=mute-status&t='+Date.now(),{cache:'no-store'});const j=await r.json();
+      if(j&&j.until!==undefined){localStorage.setItem(MUTE_KEY,String(j.until));MUTE_SYNC=true;}}
+    catch(e){MUTE_SYNC=false;}
+    renderMute();return;
+  }
+  try{const r=await fetch('notify_mute.json?t='+Date.now(),{cache:'no-store'});SRV_MUTE=await r.json();}
+  catch(e){SRV_MUTE=null;}
+  renderMute();
+}
+function srvMuted(){
+  if(!SRV_MUTE||!SRV_MUTE.muted)return false;
+  if(!SRV_MUTE.until)return true;
+  const t=Date.parse(SRV_MUTE.until);
+  return isNaN(t)?true:Date.now()<t;
+}
+function setMute(v){try{localStorage.setItem(MUTE_KEY,String(v))}catch(e){}renderMute();pushMute(v);}
+function renderMute(){
+  const b=$('#muteBtn');if(!b)return;
+  if(!MUTE_API){ // Actions方式：notify_mute.json の状態を表示し、タップで編集ページへ
+    if(SRV_MUTE===null){b.textContent='通知状態 取得中…';b.className='mute';return;}
+    if(srvMuted()){b.textContent='🔕 通知停止中'+(SRV_MUTE.until?('〜'+String(SRV_MUTE.until).slice(0,16).replace('T',' ')):'（無期限）');b.className='mute off';}
+    else{b.textContent='🔔 通知ON ・タップで停止';b.className='mute';}
+    return;
+  }
+  const u=muteUntil();
+  const tag=MUTE_SYNC===false?' ·同期失敗':(MUTE_SYNC?'':' ·同期中');
+  if(u===-1){b.textContent='🔕 通知OFF'+tag;b.className='mute off';}
+  else if(u>Date.now()){b.textContent='🔕 '+new Date(u).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})+'まで停止'+tag;b.className='mute off';}
+  else{b.textContent='🔔 通知ON'+tag;b.className='mute';}
+}
+function cycleMute(){
+  if(!MUTE_API){window.open(MUTE_EDIT_URL,'_blank','noopener');return;}
+  const u=muteUntil();
+  if(!isMuted())setMute(Date.now()+3600e3);
+  else if(u!==-1)setMute(-1);
+  else setMute(0);
+}
+function cycleMute(){const u=muteUntil();
+  if(!isMuted())setMute(Date.now()+3600e3);
+  else if(u!==-1)setMute(-1);
+  else setMute(0);
+}
+
+/* ====== 想定到達日数：σ·√D + s·D = 距離 を D について解く ======
+   σ=日次ボラ(価格), s=金利差ドリフト(価格/日)。損切り側はドリフトが逆に効く。 */
+function daysTo(dist,sig,drift,fav){
+  if(!(dist>0)||!(sig>0))return null;
+  const s=fav?drift:-drift;
+  if(Math.abs(s)<1e-12)return Math.pow(dist/sig,2);
+  const disc=sig*sig+4*s*dist;
+  if(disc<0)return Infinity;
+  let x=(-sig+Math.sqrt(disc))/(2*s);
+  if(x<=0)x=(-sig-Math.sqrt(disc))/(2*s);
+  return x>0?x*x:Infinity;
+}
+const sigDaily=p=>p.price*(p.vol/100)/Math.sqrt(252);
+const driftDaily=p=>p.price*(p.diff/100)/365;
+function fmtD(d){if(d==null)return'—';if(!isFinite(d))return'到達しにくい';return d<1?d.toFixed(1)+'日':Math.round(d)+'日';}
+/* carry_status.json に実測(バックテスト中央値)があればそれを優先し、無ければ上のモデルで推定 */
+function fmtHold(h){return h==null?null:(h<24?'約'+h+'時間':'約'+(h/24).toFixed(1)+'日');}
+const tpHold=p=>fmtHold(p.hold_tp_h)||(fmtD(daysTo(p.tp_price-p.price,sigDaily(p),driftDaily(p),true))+' 推定');
+const slHold=p=>fmtHold(p.hold_sl_h)||(fmtD(daysTo(p.price-p.sl_price,sigDaily(p),driftDaily(p),false))+' 推定');
+
+/* ====== 保有ポジション ====== */
+const POS_KEY='carry_positions';
+function posLoad(){try{return JSON.parse(localStorage.getItem(POS_KEY))||[]}catch(e){return[]}}
+function posSave(a){try{localStorage.setItem(POS_KEY,JSON.stringify(a))}catch(e){}renderPos();}
+function findPair(sym){return (S&&S.pairs||[]).find(p=>p.symbol===sym)||null;}
+function nowPrice(sym){const p=findPair(sym);return PRICE[sym]?PRICE[sym].bid:(p?p.price:null);}
+function renderPos(){
+  const box=$('#poslist');if(!box)return;
+  const arr=posLoad();
+  if(!arr.length){box.innerHTML='<div class="reasons" style="margin-top:10px">保有ポジションはまだありません。</div>';return;}
+  box.innerHTML=arr.map((q,i)=>{
+    const p=findPair(q.sym),cur=nowPrice(q.sym),units=q.lot*10000;
+    const held=Math.max(0,Math.floor((Date.now()-new Date(q.date+'T00:00:00+09:00').getTime())/864e5));
+    const swapDay=p?(p.swap_day_yen!=null?p.swap_day_yen*q.lot:units*q.entry*(p.diff/100)/365):0;
+    const swapSum=swapDay*held;
+    const move=cur!=null?(cur-q.entry)*units:null, tot=move!=null?move+swapSum:null;
+    let dTp='—',dSl='—',prog=0;
+    if(p){
+      const rem=h=>h==null?null:Math.max(0,h/24-held);
+      const rt=rem(p.hold_tp_h),rs=rem(p.hold_sl_h);
+      if(rt!=null)dTp=rt<0.05?'目安を超過':'あと約'+rt.toFixed(1)+'日';
+      if(rs!=null)dSl=rs<0.05?'目安を超過':'あと約'+rs.toFixed(1)+'日';
+      if(cur!=null){
+        const sg=sigDaily(p),dr=driftDaily(p);
+        const tp=q.entry*(1+p.tp_pct/100),sl=q.entry*(1+p.sl_pct/100);
+        if(rt==null)dTp=fmtD(daysTo(tp-cur,sg,dr,true));
+        if(rs==null)dSl=fmtD(daysTo(cur-sl,sg,dr,false));
+        prog=Math.max(0,Math.min(100,(cur-q.entry)/((tp-q.entry)||1)*100));
+      }
+    }
+    return`<div class="prow">
+      <div class="row"><span class="rsym">${q.sym.replace('_','/')} <small>${q.lot}万通貨 ／ 建値 ${q.entry}</small></span>
+        <button class="pdel" type="button" data-i="${i}" aria-label="削除">×</button></div>
+      <div class="row" style="margin-top:7px;align-items:flex-end">
+        <span class="pnl ${tot>=0?'up':'dn'}">${tot==null?'—':(tot>=0?'+':'')+Math.round(tot).toLocaleString()}円</span>
+        <span class="crlab">保有 ${held}日 ・ 現在 ${fmt(cur)}</span></div>
+      <div class="crbar"><i style="width:${prog}%"></i></div>
+      <div class="chips">
+        <span class="chip">値幅 <b class="${move>=0?'up':'dn'}">${move==null?'—':Math.round(move).toLocaleString()}円</b></span>
+        <span class="chip">累計スワップ <b class="${swapSum>=0?'up':'dn'}">${swapSum>=0?'+':''}${Math.round(swapSum).toLocaleString()}円</b></span>
+        <span class="chip">日々 <b>${Math.round(swapDay).toLocaleString()}円/日</b></span>
+        <span class="chip tp">利確まで <b>${dTp}</b></span>
+        <span class="chip sl">損切まで <b>${dSl}</b></span>
+      </div></div>`;
+  }).join('');
+  box.querySelectorAll('.pdel').forEach(b=>b.onclick=()=>{const a=posLoad();a.splice(+b.dataset.i,1);posSave(a);});
+}
+function initPos(){
+  const sel=$('#pfSym');if(!sel)return;
+  sel.innerHTML=CSYMS.map(s=>`<option value="${s}">${s.replace('_','/')}</option>`).join('');
+  $('#pfDate').value=new Date(Date.now()+324e5).toISOString().slice(0,10);
+  $('#pfAdd').onclick=()=>{
+    const q={sym:sel.value,entry:Number($('#pfEntry').value),lot:Number($('#pfLot').value)||1,date:$('#pfDate').value};
+    if(!q.entry||!q.date){alert('建値と建玉日を入力してください。');return;}
+    const a=posLoad();a.push(q);posSave(a);$('#pfEntry').value='';
+  };
+  renderPos();
+}
 
 function spark(closes,ef,es){
   const W=300,H=70,all=[...closes,...ef.filter(x=>x!=null),...es.filter(x=>x!=null)];
@@ -122,6 +296,12 @@ function card(p,i){
       <span class="chip">ADX <b>${fmt(p.adx)}</b></span>
       <span class="chip tp">TP <b>${fmt(p.tp_price)}</b> (${p.tp_pct>=0?'+':''}${fmt(p.tp_pct)}%)</span>
       <span class="chip sl">SL <b>${fmt(p.sl_price)}</b> (${fmt(p.sl_pct)}%)</span>
+      <span class="chip tp">想定利確 <b>${tpHold(p)}</b></span>
+      <span class="chip sl">想定損切 <b>${slHold(p)}</b></span>
+      ${p.tp_winrate!=null?`<span class="chip">TP勝率 <b>${p.tp_winrate}%</b> <small>（${p.stats_n}回）</small></span>`:''}
+      ${p.swap_day_yen!=null?`<span class="chip">スワップ <b class="${p.swap_day_yen>=0?'up':'dn'}">${p.swap_day_yen>=0?'+':''}${p.swap_day_yen.toLocaleString()}円/日</b></span>`:''}
+      ${p.combo_tp_yen!=null?`<span class="chip">価格+スワップ <b class="${p.combo_tp_yen>=0?'up':'dn'}">${p.combo_tp_yen>=0?'+':''}${p.combo_tp_yen.toLocaleString()}円</b></span>`:''}
+      ${p.be_days!=null?`<span class="chip">SL1回の回収 <b>${p.be_days}日</b></span>`:''}
     </div>
     <div class="reasons">${(p.reasons||[]).join(' ／ ')}</div>${risk}</div>`;
 }
@@ -133,6 +313,7 @@ function render(){
   $('#asof').textContent='金利基準 '+(S.rate_asof||'—');
   $('#ranking').innerHTML=(S.ranking||[]).map(rankRow).join('')||'<div class="rrow">データなし</div>';
   $('#pairs').innerHTML=(S.pairs||[]).map(card).join('');
+  renderPos();
   $('#foot').innerHTML='金利差・スワップは変動します。キャリー取引は急落(アンワインド)・新興国減価の尾部リスク大。表示は判断補助で利益・最適値を保証しません。自己責任で。';
 }
 
@@ -183,7 +364,7 @@ function carryEval(sym,o){const P=CP,closes=o.map(r=>r[2]);if(closes.length<Math
 function notifyBase(){return LIVE_PRICE_URL.split('?')[0].replace(/\/$/,'');}
 function loadNotified(){try{return JSON.parse(localStorage.getItem('carry_notified'))||{}}catch(e){return{}}}
 function saveNotified(o){try{localStorage.setItem('carry_notified',JSON.stringify(o));}catch(e){}}
-async function notifyLive(text){if(!LIVE_PRICE_URL)return;try{await fetch(notifyBase()+'?action=notify'+(NOTIFY_KEY?('&key='+encodeURIComponent(NOTIFY_KEY)):''),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});}catch(e){}}
+async function notifyLive(text){if(!LIVE_PRICE_URL||isMuted())return;try{await fetch(notifyBase()+'?action=notify'+(NOTIFY_KEY?('&key='+encodeURIComponent(NOTIFY_KEY)):''),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});}catch(e){}}
 function jstYear(off){return String(new Date().getFullYear()+off);}
 async function fetchK4(base,sym){let rows={};for(const off of [0,-1]){const path=`/public/v1/klines?symbol=${sym}&priceType=BID&interval=4hour&date=${jstYear(off)}`;
   try{const r=await fetch(`${base}?path=${encodeURIComponent(path)}&last=260&t=${Date.now()}`,{cache:'no-store'});const j=await r.json();(j.data||[]).forEach(k=>{rows[+k.openTime]=[+k.high,+k.low,+k.close];});}catch(e){}
@@ -225,5 +406,6 @@ async function applyLive(){
     $('#updated').textContent='更新 '+(S?S.generated_at:'—')+' ・LIVE価格 '+new Date().toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour12:false});
   }catch(e){}
 }
+$('#muteBtn').onclick=cycleMute;renderMute();pullMute();initPos();
 load();setInterval(load,60000);if(LIVE_PRICE_URL){setInterval(applyLive,15000);setInterval(liveCarry,180000);}if('serviceWorker' in navigator){navigator.serviceWorker.register('carry-sw.js').catch(()=>{});}
 </script></body></html>

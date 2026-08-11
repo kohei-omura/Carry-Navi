@@ -38,6 +38,7 @@ PERIODS_PER_YEAR = 6*252   # 4時間足の年間本数の目安
 W_EMA,W_MACD,W_RSI,W_BB = 0.40,0.30,0.15,0.15
 CHART_POINTS = 60
 STATUS_FILE = "carry_status.json"
+MUTE_FILE = "notify_mute.json"   # ← 通知ミュート設定（muted:true で通知を止める）
 _OHLC = {}
 
 # ===== 想定保有・勝率の検証設定 =====
@@ -327,8 +328,39 @@ def build_status(ticker, market_open):
     return notify
 
 
+# ---------- 通知ミュート ----------
+def is_muted():
+    """notify_mute.json を見て通知を止めるべきか判定。
+       muted:false / ファイル無し → 通知する
+       muted:true  + until:null   → 解除するまで停止
+       muted:true  + until:日時   → その日時まで停止"""
+    try:
+        with open(MUTE_FILE, encoding="utf-8") as f:
+            cfg = json.load(f)
+    except Exception:
+        return False
+    if not cfg.get("muted"):
+        return False
+    until = cfg.get("until")
+    if not until:
+        print("[MUTE] 通知停止中（解除するまで）")
+        return True
+    try:
+        limit = datetime.datetime.fromisoformat(str(until))
+        if limit.tzinfo is None:
+            limit = limit.replace(tzinfo=JST)
+        if datetime.datetime.now(JST) < limit:
+            print(f"[MUTE] 通知停止中（{until} まで）")
+            return True
+        return False
+    except Exception:
+        print("[MUTE] until の書式が読めないため停止側で判定")
+        return True
+
+
 # ---------- 通知 ----------
-def notify_line(text):
+def notify_line(text, force=False):
+    if not force and is_muted(): print("[MUTE] LINEをスキップ"); return
     tok=os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
     if not tok: print("[INFO] LINE未設定"); return
     try:
@@ -337,7 +369,8 @@ def notify_line(text):
             json={"messages":[{"type":"text","text":text}]},timeout=15)
         print(f"[INFO] LINE {r.status_code}")
     except Exception as e: print(f"[WARN] LINE失敗 {e}",file=sys.stderr)
-def notify_mail(sub,body):
+def notify_mail(sub,body,force=False):
+    if not force and is_muted(): print("[MUTE] メールをスキップ"); return
     a=os.environ.get("GMAIL_ADDRESS"); pw=os.environ.get("GMAIL_APP_PASSWORD"); to=os.environ.get("MAIL_TO") or a
     if not(a and pw): print("[INFO] Gmail未設定"); return
     try:
@@ -350,7 +383,7 @@ def notify_mail(sub,body):
 def main():
     now=datetime.datetime.now(JST).strftime("%Y-%m-%d %H:%M JST")
     if os.environ.get("TEST_NOTIFY","").lower()=="true":
-        m=f"✅ Carry Naviテスト通知\n{now}"; print(m); notify_line(m); notify_mail("【Carry】テスト",m); return
+        m=f"✅ Carry Naviテスト通知\n{now}"; print(m); notify_line(m,force=True); notify_mail("【Carry】テスト",m,force=True); return
     market_open=market_is_open(); ticker=fetch_ticker()
     notify=build_status(ticker,market_open)
     if not market_open: print(f"[INFO] {now} 市場クローズ")
