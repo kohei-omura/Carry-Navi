@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-21 16:00 JST",
+  "generated_at": "2026-08-21 16:50 JST",
   "market_open": true,
   "mode": "swing-4H",
   "rate_asof": "2026-06-15",
@@ -7,32 +7,32 @@
   "pairs": [
     {
       "symbol": "TRY_JPY",
-      "price": 3.298,
-      "ef": 3.3052148302941116,
-      "es": 3.315325857562167,
-      "rsi": 41.2,
+      "price": 3.296,
+      "ef": 3.3050330121122933,
+      "es": 3.315254428990739,
+      "rsi": 39.8,
       "adx": 58.0,
-      "atr": 0.0099,
+      "atr": 0.01,
       "atr_pct": 0.3,
       "vol": 11.7,
       "diff": 39.25,
       "foreign_rate": 40.0,
       "carry_dir": "買い",
       "swap_sign": "+",
-      "ctr": 3.346,
-      "trend": -0.455,
+      "ctr": 3.344,
+      "trend": -0.536,
       "verdict": "様子見（下落中）",
       "vcls": "wait",
       "risk": true,
       "risk_note": "超高金利＝急落・減価リスク特大。少額・長期前提で",
-      "tp_price": 3.328,
-      "sl_price": 3.278,
-      "tp_pct": 0.9,
-      "sl_pct": -0.6,
+      "tp_price": 3.326,
+      "sl_price": 3.276,
+      "tp_pct": 0.91,
+      "sl_pct": -0.61,
       "reasons": [
         "金利差+39.25%",
         "EMA下(21/55)",
-        "RSI41",
+        "RSI40",
         "ADX58"
       ],
       "closes": [
@@ -95,7 +95,7 @@
         3.306,
         3.299,
         3.301,
-        3.298
+        3.296
       ],
       "ema_f_series": [
         3.31,
@@ -221,8 +221,8 @@
         3.316,
         3.315
       ],
-      "bid": 3.298,
-      "ask": 3.308,
+      "bid": 3.296,
+      "ask": 3.306,
       "tp_winrate": 7,
       "hold_tp_h": 70,
       "hold_sl_h": 32,
@@ -238,12 +238,12 @@
     },
     {
       "symbol": "ZAR_JPY",
-      "price": 9.886,
-      "ef": 9.839578251513286,
-      "es": 9.816476404245151,
-      "rsi": 64.4,
+      "price": 9.884,
+      "ef": 9.839396433331467,
+      "es": 9.816404975673722,
+      "rsi": 64.0,
       "adx": 14.5,
-      "atr": 0.0287,
+      "atr": 0.0288,
       "atr_pct": 0.29,
       "vol": 11.5,
       "diff": 6.25,
@@ -251,13 +251,13 @@
       "carry_dir": "買い",
       "swap_sign": "+",
       "ctr": 0.545,
-      "trend": 0.364,
+      "trend": 0.362,
       "verdict": "買い（順張り）",
       "vcls": "buy",
       "risk": true,
       "risk_note": "新興国通貨・尾部(急落)リスクあり",
-      "tp_price": 9.972,
-      "sl_price": 9.829,
+      "tp_price": 9.97,
+      "sl_price": 9.826,
       "tp_pct": 0.87,
       "sl_pct": -0.58,
       "reasons": [
@@ -327,7 +327,7 @@
         9.862,
         9.859,
         9.878,
-        9.886
+        9.884
       ],
       "ema_f_series": [
         9.674,
@@ -389,7 +389,7 @@
         9.828,
         9.831,
         9.835,
-        9.84
+        9.839
       ],
       "ema_s_series": [
         9.684,
@@ -453,29 +453,29 @@
         9.814,
         9.816
       ],
-      "bid": 9.886,
-      "ask": 9.896,
+      "bid": 9.883,
+      "ask": 9.893,
       "tp_winrate": 44,
       "hold_tp_h": 76,
       "hold_sl_h": 40,
-      "stats_n": 468,
+      "stats_n": 470,
       "swap_day_yen": 17,
       "swap_day_pct": 0.017,
       "swap_tp_yen": 54,
       "swap_tp_pct": 0.05,
       "combo_tp_yen": 914,
       "combo_tp_pct": 0.92,
-      "sl_loss_yen": 570,
-      "be_days": 33.7
+      "sl_loss_yen": 580,
+      "be_days": 34.3
     },
     {
       "symbol": "MXN_JPY",
-      "price": 9.389,
-      "ef": 9.355874896937644,
-      "es": 9.329192797779548,
-      "rsi": 66.7,
-      "adx": 21.6,
-      "atr": 0.0207,
+      "price": 9.384,
+      "ef": 9.3554203514831,
+      "es": 9.329014226350976,
+      "rsi": 65.0,
+      "adx": 21.5,
+      "atr": 0.0209,
       "atr_pct": 0.22,
       "vol": 10.1,
       "diff": 6.0,
@@ -483,21 +483,21 @@
       "carry_dir": "買い",
       "swap_sign": "+",
       "ctr": 0.592,
-      "trend": 0.484,
+      "trend": 0.459,
       "verdict": "買い（順張り）",
       "vcls": "buy",
       "risk": true,
       "risk_note": "新興国通貨・尾部(急落)リスクあり",
-      "tp_price": 9.451,
-      "sl_price": 9.348,
-      "tp_pct": 0.66,
+      "tp_price": 9.447,
+      "sl_price": 9.342,
+      "tp_pct": 0.67,
       "sl_pct": -0.44,
       "reasons": [
         "金利差+6.00%",
         "EMA上(21/55)",
         "MACD+",
-        "RSI67",
-        "ADX22"
+        "RSI65",
+        "ADX21"
       ],
       "closes": [
         9.191,
@@ -559,7 +559,7 @@
         9.381,
         9.369,
         9.385,
-        9.389
+        9.384
       ],
       "ema_f_series": [
         9.176,
@@ -621,7 +621,7 @@
         9.347,
         9.349,
         9.353,
-        9.356
+        9.355
       ],
       "ema_s_series": [
         9.204,
@@ -685,50 +685,49 @@
         9.327,
         9.329
       ],
-      "bid": 9.389,
-      "ask": 9.393,
+      "bid": 9.384,
+      "ask": 9.388,
       "tp_winrate": 50,
       "hold_tp_h": 80,
       "hold_sl_h": 36,
-      "stats_n": 476,
+      "stats_n": 477,
       "swap_day_yen": 15,
       "swap_day_pct": 0.016,
       "swap_tp_yen": 51,
       "swap_tp_pct": 0.05,
-      "combo_tp_yen": 671,
-      "combo_tp_pct": 0.72,
-      "sl_loss_yen": 410,
-      "be_days": 26.6
+      "combo_tp_yen": 681,
+      "combo_tp_pct": 0.73,
+      "sl_loss_yen": 420,
+      "be_days": 27.2
     },
     {
       "symbol": "HUF_JPY",
-      "price": 0.508,
-      "ef": 0.5054420268685906,
-      "es": 0.504069175135633,
-      "rsi": 60.5,
+      "price": 0.507,
+      "ef": 0.5053511177776815,
+      "es": 0.5040334608499186,
+      "rsi": 56.7,
       "adx": 43.5,
       "atr": 0.0026,
-      "atr_pct": 0.5,
+      "atr_pct": 0.51,
       "vol": 15.7,
       "diff": 5.5,
       "foreign_rate": 6.25,
       "carry_dir": "買い",
       "swap_sign": "+",
-      "ctr": 0.351,
-      "trend": 0.461,
+      "ctr": 0.35,
+      "trend": 0.333,
       "verdict": "買い（順張り）",
       "vcls": "buy",
       "risk": true,
       "risk_note": "新興国通貨・尾部(急落)リスクあり",
-      "tp_price": 0.516,
-      "sl_price": 0.503,
-      "tp_pct": 1.51,
+      "tp_price": 0.515,
+      "sl_price": 0.502,
+      "tp_pct": 1.52,
       "sl_pct": -1.01,
       "reasons": [
         "金利差+5.50%",
         "EMA上(21/55)",
-        "MACD+",
-        "RSI61",
+        "RSI57",
         "ADX44"
       ],
       "closes": [
@@ -791,7 +790,7 @@
         0.507,
         0.506,
         0.508,
-        0.508
+        0.507
       ],
       "ema_f_series": [
         0.499,
@@ -917,8 +916,8 @@
         0.504,
         0.504
       ],
-      "bid": 0.508,
-      "ask": 0.514,
+      "bid": 0.507,
+      "ask": 0.513,
       "tp_winrate": 19,
       "hold_tp_h": 96,
       "hold_sl_h": 28,
@@ -930,37 +929,37 @@
       "combo_tp_yen": 83,
       "combo_tp_pct": 1.64,
       "sl_loss_yen": 50,
-      "be_days": 65.3
+      "be_days": 65.4
     },
     {
       "symbol": "NZD_JPY",
-      "price": 94.85,
-      "ef": 94.19974522153495,
-      "es": 93.85934170821159,
-      "rsi": 72.8,
+      "price": 94.754,
+      "ef": 94.19101794880768,
+      "es": 93.85591313678302,
+      "rsi": 69.0,
       "adx": 30.7,
-      "atr": 0.2307,
-      "atr_pct": 0.24,
+      "atr": 0.2337,
+      "atr_pct": 0.25,
       "vol": 9.7,
       "diff": 1.5,
       "foreign_rate": 2.25,
       "carry_dir": "買い",
       "swap_sign": "+",
-      "ctr": 0.155,
-      "trend": 0.685,
+      "ctr": 0.154,
+      "trend": 0.602,
       "verdict": "買い（順張り）",
       "vcls": "buy",
       "risk": false,
       "risk_note": "",
-      "tp_price": 95.542,
-      "sl_price": 94.389,
-      "tp_pct": 0.73,
+      "tp_price": 95.455,
+      "sl_price": 94.287,
+      "tp_pct": 0.74,
       "sl_pct": -0.49,
       "reasons": [
         "金利差+1.50%",
         "EMA上(21/55)",
         "MACD+",
-        "RSI73",
+        "RSI69",
         "ADX31"
       ],
       "closes": [
@@ -1023,7 +1022,7 @@
         94.516,
         94.579,
         94.91,
-        94.85
+        94.754
       ],
       "ema_f_series": [
         92.869,
@@ -1085,7 +1084,7 @@
         94.005,
         94.057,
         94.135,
-        94.2
+        94.191
       ],
       "ema_s_series": [
         93.272,
@@ -1147,10 +1146,10 @@
         93.753,
         93.782,
         93.823,
-        93.859
+        93.856
       ],
-      "bid": 94.85,
-      "ask": 94.859,
+      "bid": 94.754,
+      "ask": 94.763,
       "tp_winrate": 47,
       "hold_tp_h": 60,
       "hold_sl_h": 32,
@@ -1159,19 +1158,19 @@
       "swap_day_pct": 0.004,
       "swap_tp_yen": 97,
       "swap_tp_pct": 0.01,
-      "combo_tp_yen": 7017,
-      "combo_tp_pct": 0.74,
-      "sl_loss_yen": 4610,
-      "be_days": 118.3
+      "combo_tp_yen": 7107,
+      "combo_tp_pct": 0.75,
+      "sl_loss_yen": 4670,
+      "be_days": 119.9
     },
     {
       "symbol": "CAD_JPY",
-      "price": 115.464,
-      "ef": 115.01854499252505,
-      "es": 114.64879020192974,
-      "rsi": 68.5,
+      "price": 115.367,
+      "ef": 115.00972681070687,
+      "es": 114.64532591621546,
+      "rsi": 64.4,
       "adx": 18.6,
-      "atr": 0.2258,
+      "atr": 0.2288,
       "atr_pct": 0.2,
       "vol": 9.7,
       "diff": 1.5,
@@ -1179,20 +1178,20 @@
       "carry_dir": "買い",
       "swap_sign": "+",
       "ctr": 0.154,
-      "trend": 0.433,
+      "trend": 0.365,
       "verdict": "買い（順張り）",
       "vcls": "buy",
       "risk": false,
       "risk_note": "",
-      "tp_price": 116.141,
-      "sl_price": 115.012,
+      "tp_price": 116.053,
+      "sl_price": 114.909,
       "tp_pct": 0.59,
-      "sl_pct": -0.39,
+      "sl_pct": -0.4,
       "reasons": [
         "金利差+1.50%",
         "EMA上(21/55)",
         "MACD+",
-        "RSI69",
+        "RSI64",
         "ADX19"
       ],
       "closes": [
@@ -1255,7 +1254,7 @@
         115.359,
         115.277,
         115.51,
-        115.464
+        115.367
       ],
       "ema_f_series": [
         112.826,
@@ -1317,7 +1316,7 @@
         114.885,
         114.92,
         114.974,
-        115.019
+        115.01
       ],
       "ema_s_series": [
         113.462,
@@ -1379,10 +1378,10 @@
         114.56,
         114.586,
         114.619,
-        114.649
+        114.645
       ],
-      "bid": 115.464,
-      "ask": 115.472,
+      "bid": 115.366,
+      "ask": 115.374,
       "tp_winrate": 40,
       "hold_tp_h": 72,
       "hold_sl_h": 36,
@@ -1391,40 +1390,39 @@
       "swap_day_pct": 0.004,
       "swap_tp_yen": 142,
       "swap_tp_pct": 0.01,
-      "combo_tp_yen": 6912,
-      "combo_tp_pct": 0.6,
-      "sl_loss_yen": 4520,
-      "be_days": 95.3
+      "combo_tp_yen": 7002,
+      "combo_tp_pct": 0.61,
+      "sl_loss_yen": 4580,
+      "be_days": 96.6
     },
     {
       "symbol": "SEK_JPY",
-      "price": 16.792,
-      "ef": 16.75222037797029,
-      "es": 16.727318788230736,
-      "rsi": 59.9,
+      "price": 16.757,
+      "ef": 16.74903855978847,
+      "es": 16.726068788230737,
+      "rsi": 52.5,
       "adx": 12.6,
-      "atr": 0.039,
-      "atr_pct": 0.23,
-      "vol": 9.2,
+      "atr": 0.0407,
+      "atr_pct": 0.24,
+      "vol": 9.3,
       "diff": 1.0,
       "foreign_rate": 1.75,
       "carry_dir": "買い",
       "swap_sign": "+",
       "ctr": 0.108,
-      "trend": 0.253,
-      "verdict": "買い（順張り）",
-      "vcls": "buy",
+      "trend": 0.097,
+      "verdict": "買い寄り（押し目検討）",
+      "vcls": "soft",
       "risk": false,
       "risk_note": "",
-      "tp_price": 16.909,
-      "sl_price": 16.714,
-      "tp_pct": 0.7,
-      "sl_pct": -0.46,
+      "tp_price": 16.879,
+      "sl_price": 16.676,
+      "tp_pct": 0.73,
+      "sl_pct": -0.49,
       "reasons": [
         "金利差+1.00%",
         "EMA上(21/55)",
-        "MACD+",
-        "RSI60",
+        "RSI53",
         "ADX13"
       ],
       "closes": [
@@ -1487,7 +1485,7 @@
         16.768,
         16.758,
         16.791,
-        16.792
+        16.757
       ],
       "ema_f_series": [
         16.625,
@@ -1549,7 +1547,7 @@
         16.743,
         16.744,
         16.748,
-        16.752
+        16.749
       ],
       "ema_s_series": [
         16.663,
@@ -1611,10 +1609,10 @@
         16.721,
         16.722,
         16.725,
-        16.727
+        16.726
       ],
-      "bid": 16.792,
-      "ask": 16.801,
+      "bid": 16.757,
+      "ask": 16.766,
       "tp_winrate": 49,
       "hold_tp_h": 88,
       "hold_sl_h": 36,
@@ -1623,19 +1621,19 @@
       "swap_day_pct": 0.003,
       "swap_tp_yen": 17,
       "swap_tp_pct": 0.01,
-      "combo_tp_yen": 1187,
-      "combo_tp_pct": 0.71,
-      "sl_loss_yen": 780,
-      "be_days": 169.5
+      "combo_tp_yen": 1237,
+      "combo_tp_pct": 0.74,
+      "sl_loss_yen": 810,
+      "be_days": 176.4
     }
   ],
   "ranking": [
     {
       "symbol": "TRY_JPY",
       "diff": 39.25,
-      "ctr": 3.346,
+      "ctr": 3.344,
       "vol": 11.7,
-      "trend": -0.455,
+      "trend": -0.536,
       "verdict": "様子見（下落中）",
       "vcls": "wait",
       "risk": true
@@ -1645,7 +1643,7 @@
       "diff": 6.0,
       "ctr": 0.592,
       "vol": 10.1,
-      "trend": 0.484,
+      "trend": 0.459,
       "verdict": "買い（順張り）",
       "vcls": "buy",
       "risk": true
@@ -1655,7 +1653,7 @@
       "diff": 6.25,
       "ctr": 0.545,
       "vol": 11.5,
-      "trend": 0.364,
+      "trend": 0.362,
       "verdict": "買い（順張り）",
       "vcls": "buy",
       "risk": true
@@ -1663,9 +1661,9 @@
     {
       "symbol": "HUF_JPY",
       "diff": 5.5,
-      "ctr": 0.351,
+      "ctr": 0.35,
       "vol": 15.7,
-      "trend": 0.461,
+      "trend": 0.333,
       "verdict": "買い（順張り）",
       "vcls": "buy",
       "risk": true
@@ -1673,9 +1671,9 @@
     {
       "symbol": "NZD_JPY",
       "diff": 1.5,
-      "ctr": 0.155,
+      "ctr": 0.154,
       "vol": 9.7,
-      "trend": 0.685,
+      "trend": 0.602,
       "verdict": "買い（順張り）",
       "vcls": "buy",
       "risk": false
@@ -1685,7 +1683,7 @@
       "diff": 1.5,
       "ctr": 0.154,
       "vol": 9.7,
-      "trend": 0.433,
+      "trend": 0.365,
       "verdict": "買い（順張り）",
       "vcls": "buy",
       "risk": false
@@ -1694,10 +1692,10 @@
       "symbol": "SEK_JPY",
       "diff": 1.0,
       "ctr": 0.108,
-      "vol": 9.2,
-      "trend": 0.253,
-      "verdict": "買い（順張り）",
-      "vcls": "buy",
+      "vol": 9.3,
+      "trend": 0.097,
+      "verdict": "買い寄り（押し目検討）",
+      "vcls": "soft",
       "risk": false
     }
   ]
