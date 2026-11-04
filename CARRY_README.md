@@ -3,21 +3,27 @@
 元の **FX Navi（USD/EUR/GBP/AUD 円・スキャル/デイ）では扱わない**、金利差が大きいクロス円7種に特化した
 スイング/ポジション向けアプリです。GMOコイン外国為替FX Public API + GitHub Actions + LINE/メール + ダッシュボード。
 
-## 対象ペアと金利差（2026-06-15時点・要確認）
-高金利通貨を買って円を売る＝**買いで正スワップ**になる「キャリー」候補です。
+## 対象ペアと金利差（2026-11-04時点）
+GMOクリック証券FXに存在し、GMOコインAPIで価格が取れるペアのみ。買いで正スワップになるキャリー候補です。
+FX-Signal-Notifier（USD/EUR/GBP/AUD円）と通知が重ならないよう、それらは除外しています。
 
-| ペア | 高金利側 政策金利 | 対円 金利差 |
+| ペア | 買い側 政策金利 | 金利差 |
 |---|---|---|
-| TRY/JPY | トルコ 40.00% | **+39.25%** |
-| ZAR/JPY | 南アフリカ 7.00% | +6.25% |
-| MXN/JPY | メキシコ 6.75% | +6.00% |
-| HUF/JPY | ハンガリー 6.25% | +5.50% |
-| NZD/JPY | NZ 2.25% | +1.50% |
-| CAD/JPY | カナダ 2.25% | +1.50% |
-| SEK/JPY | スウェーデン 1.75% | +1.00% |
+| TRY/JPY | トルコ 36.00% | +34.75% |
+| ZAR/JPY | 南ア 7.25% | +6.00% |
+| MXN/JPY | メキシコ 6.50% | +5.25% |
+| HUF/JPY | ハンガリー 5.50% | +4.25% |
+| **AUD/NZD**（追加） | 豪4.85% − NZ2.75% | +2.10%（円を介さず相関が低い） |
+| NZD/JPY | NZ 2.75% | +1.50% |
+| CAD/JPY | カナダ 2.50% | +1.25% |
 
-（日本 BoJ 0.75%）。金利は変動します。`carry_signal.py` の `POLICY_RATES` を編集して更新してください。
-出典: 各中央銀行発表および金利集計（BoJ/CBRT/SARB 2026-05-28/Banxico 2026-03-26/MNB/RBNZ/BoC/Riksbank, 2026-06）。
+BoJ 1.25%。`carry_signal.py` の `POLICY_RATES` を編集して更新（出典: [松井証券 政策金利一覧](https://finance.matsui.co.jp/interest-rates/index)）。
+SEK/JPYはクリック証券に無いため削除。画面の「ペア一覧」タブにクリック証券の全取扱ペアと担当区分を表示します。
+
+## ライブ価格（実際の価格に近づける）
+GMOのAPIはブラウザから直接呼べない（CORS不可）ため、価格を15秒ごとに更新するには中継Workerが必要です。
+設定タブにWorker URLを貼ると有効化（FX Navi用Workerがそのまま使えます）。無ければ `worker/carry-proxy.js` をCloudflare Workersに貼る（無料）。
+未設定時はActionのスナップショット表示で、画面に「N時間前」の警告を出します。
 
 ## 判定ロジック
 - **トレンド**（4時間足のテクニカル）：EMA(21/55)・MACD・RSI・ボリンジャー、ADXで強度調整 → -1〜+1
@@ -42,12 +48,12 @@
 
 ## セットアップ
 元のFX Naviと同じリポジトリに追加してOK（別ページとして共存します）。
-1. 次を配置：`carry_signal.py`／`carry.html`／`carry-sw.js`／`carry.webmanifest`／`carry-icon-180.png`／`carry-icon-192.png`／`carry-icon-512.png`／`carry_status.json`／`.github/workflows/carry-signal.yml`
+1. 次を配置：`carry_signal.py`／`index.html`／`carry-sw.js`／`carry.webmanifest`／`carry-icon-180.png`／`carry-icon-192.png`／`carry-icon-512.png`／`carry_status.json`／`.github/workflows/carry-signal.yml`
 2. 依存は `requests` のみ（既存の `requirements.txt` でOK）
 3. **Secrets はFX Naviと共用**：`LINE_CHANNEL_ACCESS_TOKEN`／`GMAIL_ADDRESS`／`GMAIL_APP_PASSWORD`／`MAIL_TO`（同じrepoなら設定済み）
-4. GitHub Pagesで開く：`https://ユーザー名.github.io/リポジトリ名/carry.html`
+4. GitHub Pagesで開く：`https://ユーザー名.github.io/リポジトリ名/index.html`
 5. iPhoneのSafariで「ホーム画面に追加」→ PWAとして全画面表示
-6. （任意）ライブ価格：`carry.html` の `LIVE_PRICE_URL` に**FX Naviと同じWorker URL**を入れると、現在値が15秒ごとに更新されます（Workerの改修は不要）
+6. （任意）ライブ価格：`index.html` の `LIVE_PRICE_URL` に**FX Naviと同じWorker URL**を入れると、現在値が15秒ごとに更新されます（Workerの改修は不要）
 
 ## 動作
 - ワークフローは**毎時5分**に実行（スイング=4時間足なので1時間ごとで十分）
@@ -59,7 +65,7 @@
 | ファイル | 役割 |
 |---|---|
 | carry_signal.py | エンジン（金利差×トレンド×ボラ、C/Rランキング、通知、carry_status.json生成）|
-| carry.html | ダッシュボード（ランキング＋ペア別カード、PWA）|
+| index.html | ダッシュボード（ランキング＋ペア別カード、PWA）|
 | carry-sw.js | Service Worker（オフライン/インストール対応）|
 | carry-icon-180/192/512.png | 専用アプリアイコン（金コイン＋¥＋上昇アロー）|
 | carry.webmanifest | PWA設定 |
@@ -86,7 +92,7 @@
 
 ### ライブLINE通知
 `買い（順張り）`に転じたペアを、Worker経由でLINE送信（**FX NaviのWorker・LINE_TOKEN・NOTIFY_KEYをそのまま共用**）。
-- `NOTIFY_KEY` をWorkerに設定しているなら、`carry.html` の `const NOTIFY_KEY = "";` にも同じ値を入れる
+- `NOTIFY_KEY` をWorkerに設定しているなら、`index.html` の `const NOTIFY_KEY = "";` にも同じ値を入れる
 - 同じ通貨は30分間は再送しない（連投防止）。文面は「⚡ライブ」始まり
 - **画面（PWA）を開いている間のみ**動作。閉じている時は毎時のActionが通知を担当
 
@@ -102,4 +108,4 @@
 - Android/Chrome：`carry-icon-192/512.png`（maskable対応、`theme_color #0a0c10`）
 - ヘッダーにも同じエンブレム（SVG）を表示し統一感
 
-iPhoneでは Safari で `carry.html` を開き「ホーム画面に追加」→ アイコンから全画面のアプリとして起動できます。
+iPhoneでは Safari で `index.html` を開き「ホーム画面に追加」→ アイコンから全画面のアプリとして起動できます。

@@ -3,8 +3,9 @@
 """
 FX Carry Navi — 金利差（キャリー）特化ナビ / スイング・ポジション向け
 ---------------------------------------------------------------------
-元のFX Navi(USD/EUR/GBP/AUD円)では扱わない、金利差が大きいクロス円7種を対象。
-  TRY/JPY  ZAR/JPY  MXN/JPY  HUF/JPY  NZD/JPY  CAD/JPY  SEK/JPY
+元のFX Navi / FX-Signal-Notifier(USD/EUR/GBP/AUD円のスキャル・デイ)とは重ならない、
+金利差が大きいクロス円＋AUD/NZDを対象。GMOクリック証券FXに存在し、GMOコインAPIで価格が取れるペアのみ。
+  TRY/JPY  ZAR/JPY  MXN/JPY  HUF/JPY  NZD/JPY  CAD/JPY  AUD/NZD
 判定 = トレンド(テクニカル) × キャリー(金利差/スワップ方向) を、ボラティリティで調整した
 「キャリー対リスク(carry-to-risk)」でランキング。4時間足ベースのスイング設計。
 GMOコイン外国為替FX Public API + GitHub Actions + LINE/メール + ダッシュボード(carry_status.json)。
@@ -21,12 +22,43 @@ import requests
 JST = ZoneInfo("Asia/Tokyo")
 BASE = "https://forex-api.coin.z.com/public/v1"
 PRICE_TYPE = "BID"
-SYMBOLS = ["TRY_JPY","ZAR_JPY","MXN_JPY","HUF_JPY","NZD_JPY","CAD_JPY","SEK_JPY"]
+SYMBOLS = ["TRY_JPY","ZAR_JPY","MXN_JPY","HUF_JPY","NZD_JPY","CAD_JPY","AUD_NZD"]
 
-# ===== 政策金利(%)  as of 2026-06-15（要確認・編集可）=====
-# 出典: BoJ/CBRT/SARB/Banxico/MNB/RBNZ/BoC/Riksbank 各発表・各種金利表(2026-06)
-POLICY_RATES = {"JPY":0.75, "TRY":40.0, "ZAR":7.00, "MXN":6.75, "HUF":6.25, "NZD":2.25, "CAD":2.25, "SEK":1.75}
-RATE_ASOF = "2026-06-15"
+# ===== 政策金利(%)  as of 2026-11-04（要確認・編集可）=====
+# 出典: 松井証券 政策金利一覧 https://finance.matsui.co.jp/interest-rates/index （2026-11-04 23:30更新）
+#   BoJ 1.25(10/30) / CBRT 36.00(10/22) / SARB 7.25(9/23) / Banxico 6.50(9/24) / MNB 5.50(10/20)
+#   RBNZ 2.75(10/28) / BoC 2.50(10/28) / RBA 4.85(11/3)
+POLICY_RATES = {"JPY":1.25, "TRY":36.0, "ZAR":7.25, "MXN":6.50, "HUF":5.50, "NZD":2.75, "CAD":2.50, "AUD":4.85}
+RATE_ASOF = "2026-11-04"
+
+# ===== GMOクリック証券FXの取扱ペア一覧（アプリ表示用）=====
+# role: carry=本アプリ対象 / notifier=FX-Signal-Notifier担当 / none=対象外 / nodata=クリック証券にあるがGMOコインAPIに無く価格取得不可
+UNIVERSE = [
+ ("USD_JPY","notifier","FX-Signal-Notifier担当（スキャル・デイ）"),
+ ("EUR_JPY","notifier","FX-Signal-Notifier担当（スキャル・デイ）"),
+ ("GBP_JPY","notifier","FX-Signal-Notifier担当（スキャル・デイ）"),
+ ("AUD_JPY","notifier","FX-Signal-Notifier担当（スキャル・デイ）"),
+ ("NZD_JPY","carry","金利差+ 低ボラ寄りの王道キャリー"),
+ ("CAD_JPY","carry","金利差+ 比較的安定"),
+ ("CHF_JPY","none","金利差マイナス（買いで負スワップ）"),
+ ("TRY_JPY","carry","超高金利・減価リスク特大"),
+ ("ZAR_JPY","carry","高金利・新興国"),
+ ("MXN_JPY","carry","高金利・新興国（C/R良好）"),
+ ("HUF_JPY","carry","高金利・新興国"),
+ ("CZK_JPY","nodata","GMOコインAPIに無く価格取得不可"),
+ ("PLN_JPY","nodata","GMOコインAPIに無く価格取得不可"),
+ ("AUD_NZD","carry","★追加：JPYを介さない金利差。Notifierと値動きが独立"),
+ ("EUR_USD","none","金利差が小さく対象外"),
+ ("GBP_USD","none","金利差が小さく対象外"),
+ ("AUD_USD","none","USD系は本アプリの対象外"),
+ ("NZD_USD","none","USD系は本アプリの対象外"),
+ ("EUR_GBP","none","金利差が小さく対象外"),
+ ("EUR_AUD","nodata","GMOコインAPIに無く価格取得不可"),
+ ("GBP_AUD","nodata","GMOコインAPIに無く価格取得不可"),
+ ("EUR_CHF","nodata","GMOコインAPIに無く価格取得不可"),
+ ("GBP_CHF","nodata","GMOコインAPIに無く価格取得不可"),
+ ("USD_CHF","nodata","GMOコインAPIに無く価格取得不可"),
+]
 
 # ===== スイング設定（4時間足）=====
 P = {"interval":"4hour","ema_f":21,"ema_s":55,"rsi":14,"macd":(12,26,9),"bb":(20,2.0),"adx":14,"atr":14}
@@ -45,6 +77,7 @@ _OHLC = {}
 STATS_WINDOW = 500    # 直近何本(4h)のシグナルを検証対象にするか（≒83日）
 STATS_LOOKBACK = 220  # 各バーで指標を再計算する際の遡り本数
 BAR_HOURS = 4         # 4時間足
+PX_DEC = 5            # 価格の丸め桁（AUD/NZDは5桁、円クロスは3桁で十分だが共通で5）
 
 
 # ---------- データ取得（4時間足は date=年 で一括）----------
@@ -70,7 +103,7 @@ def fetch_ticker():
     out={}
     try:
         for d in requests.get(f"{BASE}/ticker",timeout=10).json().get("data",[]):
-            out[d["symbol"]]={"bid":float(d["bid"]),"ask":float(d["ask"])}
+            out[d["symbol"]]={"bid":float(d["bid"]),"ask":float(d["ask"]),"ts":d.get("timestamp")}
     except Exception as e:
         print(f"[WARN] ticker失敗: {e}",file=sys.stderr)
     return out
@@ -166,8 +199,8 @@ def evaluate(symbol, o):
     bb_sig=clamp((price-bb[0])/(P["bb"][1]*bb[3] if bb[3] else 1e-9))
     trend=clamp(W_EMA*ema_sig*adxf+W_MACD*macd_sig*adxf+W_RSI*rsi_sig+W_BB*bb_sig)
 
-    foreign=symbol.split("_")[0]
-    diff=POLICY_RATES.get(foreign,0.0)-POLICY_RATES.get("JPY",0.0)  # 金利差(年率%)
+    foreign,quote=symbol.split("_")
+    diff=POLICY_RATES.get(foreign,0.0)-POLICY_RATES.get(quote,0.0)  # 金利差(年率%)（買い通貨−売り通貨）
     carry_dir="買い" if diff>=0 else "売り"                          # 高金利通貨ロング
     ctr=diff/max(vol,1e-9)                                          # キャリー対リスク
 
@@ -200,15 +233,15 @@ def evaluate(symbol, o):
     if abs(macd_sig)>0.2: reasons.append(f"MACD{'+' if md[2]>0 else '-'}")
     reasons.append(f"RSI{rv:.0f}"); reasons.append(f"ADX{adx_val:.0f}")
     return {"symbol":symbol,"price":price,"ef":ef,"es":es,"rsi":round(rv,1),"adx":round(adx_val,1),
-            "atr":round(a,4),"atr_pct":round(atr_pct,2),"vol":round(vol,1),
-            "diff":round(diff,2),"foreign_rate":POLICY_RATES.get(foreign),"carry_dir":carry_dir,
+            "atr":round(a,6),"atr_pct":round(atr_pct,2),"vol":round(vol,1),
+            "diff":round(diff,2),"foreign_rate":POLICY_RATES.get(foreign),"base":foreign,"quote":quote,"quote_rate":POLICY_RATES.get(quote),"carry_dir":carry_dir,
             "swap_sign":("+" if diff>=0 else "-"),"ctr":round(ctr,3),
             "trend":round(trend,3),"verdict":verdict,"vcls":vcls,"risk":risk,"risk_note":risk_note,
-            "tp_price":round(tp_price,3),"sl_price":round(sl_price,3),
+            "tp_price":round(tp_price,PX_DEC),"sl_price":round(sl_price,PX_DEC),
             "tp_pct":round(tp_pct,2),"sl_pct":round(sl_pct,2),"reasons":reasons,
-            "closes":[round(c,3) for c in closes[-CHART_POINTS:]],
-            "ema_f_series":[round(x,3) if x is not None else None for x in ema_series(closes,P["ema_f"])[-CHART_POINTS:]],
-            "ema_s_series":[round(x,3) if x is not None else None for x in ema_series(closes,P["ema_s"])[-CHART_POINTS:]]}
+            "closes":[round(c,PX_DEC) for c in closes[-CHART_POINTS:]],
+            "ema_f_series":[round(x,PX_DEC) if x is not None else None for x in ema_series(closes,P["ema_f"])[-CHART_POINTS:]],
+            "ema_s_series":[round(x,PX_DEC) if x is not None else None for x in ema_series(closes,P["ema_s"])[-CHART_POINTS:]]}
 
 
 # ---------- 想定保有・TP勝率（過去シグナルをATRのTP/SLで検証）----------
@@ -260,18 +293,18 @@ def fmt_dur(h):
 # ---------- スワップ（金利）収益の理論概算 ----------
 REF_UNITS = 10000   # 概算の基準数量（1万通貨）
 
-def swap_estimate(price, diff, hold_tp_h, tp_price, sl_price=None):
+def swap_estimate(price, diff, hold_tp_h, tp_price, sl_price=None, qjpy=1.0):
     """金利差ベースの理論スワップ概算（1万通貨）。
        ⚠ 実際のスワップ付与額は業者・日々で変動し、スプレッド/税は別。あくまで目安。"""
     if price is None or diff is None or diff <= 0: return None
-    notional = price * REF_UNITS
+    notional = price * qjpy * REF_UNITS            # 円換算（決済通貨が円以外ならqjpyで換算）
     day_yen = notional * (diff/100.0) / 365.0     # 1日あたり概算スワップ(円)
     day_pct = diff / 365.0                          # 1日あたり概算(%)
     out = {"swap_day_yen": round(day_yen), "swap_day_pct": round(day_pct, 3)}
     if hold_tp_h:
         days = hold_tp_h / 24.0
         swap_yen = day_yen * days
-        price_yen = (tp_price - price) * REF_UNITS if tp_price is not None else 0.0
+        price_yen = (tp_price - price) * REF_UNITS * qjpy if tp_price is not None else 0.0
         out.update({
             "swap_tp_yen": round(swap_yen),
             "swap_tp_pct": round(day_pct*days, 2),
@@ -280,7 +313,7 @@ def swap_estimate(price, diff, hold_tp_h, tp_price, sl_price=None):
         })
     # 損切り1回分(1万通貨)をスワップで回収するのに必要な日数
     if sl_price is not None and day_yen > 0:
-        sl_loss_yen = (price - sl_price) * REF_UNITS
+        sl_loss_yen = (price - sl_price) * REF_UNITS * qjpy
         if sl_loss_yen > 0:
             out["sl_loss_yen"] = round(sl_loss_yen)
             out["be_days"] = round(sl_loss_yen / day_yen, 1)
@@ -293,11 +326,13 @@ def build_status(ticker, market_open):
         ev=evaluate(sym, get_ohlc(sym))
         if not ev: continue
         ev["bid"]=ticker.get(sym,{}).get("bid"); ev["ask"]=ticker.get(sym,{}).get("ask")
+        # 決済通貨→円の換算レート（円クロスは1）。円換算の数量・スワップ・損益計算に使う
+        ev["qjpy"]=1.0 if ev["quote"]=="JPY" else (ticker.get(f"{ev['quote']}_JPY",{}).get("bid") or 1.0)
         st=compute_carry_stats(get_ohlc(sym), ev["diff"])
         if st:
             ev["tp_winrate"]=st["tp_winrate"]; ev["hold_tp_h"]=st["hold_tp_h"]
             ev["hold_sl_h"]=st["hold_sl_h"]; ev["stats_n"]=st["n"]
-        sw=swap_estimate(ev["price"], ev["diff"], ev.get("hold_tp_h"), ev["tp_price"], ev["sl_price"])
+        sw=swap_estimate(ev["price"], ev["diff"], ev.get("hold_tp_h"), ev["tp_price"], ev["sl_price"], ev["qjpy"])
         if sw: ev.update(sw)
         pairs.append(ev)
         if market_open and ev["vcls"]=="buy":
@@ -313,7 +348,7 @@ def build_status(ticker, market_open):
                     swtxt+=(f"\n  ⚖ 損切り1回(約{ev['sl_loss_yen']:,}円/1万)をスワップで回収=約{ev['be_days']}日"
                             f"（価格リスク≫金利。回収日数が長いほど要注意）")
             notify.append(f"🟢 {sym} {ev['verdict']}（キャリー）\n"
-                          f"  金利差 {ev['diff']:+.2f}%（{ev['foreign_rate']}% vs JPY {POLICY_RATES['JPY']}%）/ スワップ方向: 買いで{ev['swap_sign']}\n"
+                          f"  金利差 {ev['diff']:+.2f}%（{ev['base']} {ev['foreign_rate']}% vs {ev['quote']} {ev['quote_rate']}%）/ スワップ方向: 買いで{ev['swap_sign']}\n"
                           f"  トレンド{ev['trend']:+.2f} / 年率ボラ{ev['vol']:.1f}% / キャリー対リスク{ev['ctr']:.2f}{' ⚠高ボラ' if ev['risk'] else ''}\n"
                           f"  現在{ev['price']} / TP {ev['tp_price']}({ev['tp_pct']:+.1f}%) / SL {ev['sl_price']}({ev['sl_pct']:+.1f}%)"
                           + stxt + swtxt)
@@ -321,7 +356,10 @@ def build_status(ticker, market_open):
     rank=sorted([p for p in pairs if p["diff"]>0], key=lambda x:x["ctr"], reverse=True)
     ranking=[{"symbol":p["symbol"],"diff":p["diff"],"ctr":p["ctr"],"vol":p["vol"],
               "trend":p["trend"],"verdict":p["verdict"],"vcls":p["vcls"],"risk":p["risk"]} for p in rank]
-    status={"generated_at":datetime.datetime.now(JST).strftime("%Y-%m-%d %H:%M JST"),
+    tss=[t["ts"] for t in ticker.values() if t.get("ts")]
+    status={"price_ts":max(tss) if tss else None,"rates":POLICY_RATES,
+            "universe":[{"symbol":a,"role":b,"note":c} for a,b,c in UNIVERSE],
+            "generated_at":datetime.datetime.now(JST).strftime("%Y-%m-%d %H:%M JST"),
             "market_open":market_open,"mode":"swing-4H","rate_asof":RATE_ASOF,
             "jpy_rate":POLICY_RATES["JPY"],"pairs":pairs,"ranking":ranking}
     json.dump(status, open(STATUS_FILE,"w",encoding="utf-8"), ensure_ascii=False, indent=2)
