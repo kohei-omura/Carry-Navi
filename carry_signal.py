@@ -18,6 +18,7 @@ from email.mime.text import MIMEText
 from email.utils import formatdate
 from zoneinfo import ZoneInfo
 import requests
+import carry_link   # FX Navi(FX-Signal-Notifier)との連携（円の強さ・指標カレンダー・FX保有）
 
 JST = ZoneInfo("Asia/Tokyo")
 BASE = "https://forex-api.coin.z.com/public/v1"
@@ -72,6 +73,13 @@ CHART_POINTS = 60
 STATUS_FILE = "carry_status.json"
 MUTE_FILE = "notify_mute.json"   # ← 通知ミュート設定（muted:true で通知を止める）
 _OHLC = {}
+
+# ===== 通知の重複防止（LINE枠をFX Naviと共有しているため）=====
+# 毎時実行で同じ「買い（順張り）」を繰り返し送らないよう、新しく買いに転じた時だけ通知する。
+# 一度通知したペアは、トレンドが TREND_TH − REARM_GAP を下回るまで再通知しない（しきい値付近のチラつき防止）。
+REARM_GAP = 0.10
+# 円高警戒（FX Navi連携の円の強さ）中の扱い。False=注意書きを付けて通知 / True=通知を止める
+YEN_WARN_BLOCK = False
 
 # ===== 想定保有・勝率の検証設定 =====
 STATS_WINDOW = 500    # 直近何本(4h)のシグナルを検証対象にするか（≒83日）
@@ -320,8 +328,58 @@ def swap_estimate(price, diff, hold_tp_h, tp_price, sl_price=None, qjpy=1.0):
     return out
 
 
+def _load_prev_state():
+    """前回の carry_status.json から通知状態を読む（無ければ空）。"""
+    try:
+        with open(STATUS_FILE, encoding="utf-8") as f:
+            return (json.load(f) or {}).get("notify_state") or {}
+    except Exception:
+        return {}
+
+
+def _link_lines(ev, link):
+    """通知文に足すFX Navi連携の注記（円の強さ・FX保有との重複）。"""
+    out=[]
+    y=(link or {}).get("yen") or {}
+    if y.get("level")=="warn":
+        out.append(f"  ⚠ 円高警戒（円の強さ{y['score']:+.2f}）— キャリーの急落(アンワインド)に注意。数量は控えめに")
+    elif y.get("level")=="soft":
+        out.append(f"  △ やや円高（円の強さ{y['score']:+.2f}）")
+    ov=carry_link.overlap_notes(ev["symbol"], (link or {}).get("fx_positions") or [])
+    if ov:
+        out.append("  🔗 FX Navi保有と重複: "+" / ".join(ov))
+    return ("\n"+"\n".join(out)) if out else ""
+
+
+def select_notify(pairs, buys, prev_state, events, yen_lv, now_s):
+    """新しく買いに転じたペアだけを通知対象にする。指標の前後は保留し、次の毎時実行で再判定。
+       戻り値: (通知するペアのリスト, 次回へ引き継ぐ通知状態)"""
+    out=[]; nstate={}
+    buy_syms={b["symbol"] for b in buys}
+    for ev in pairs:
+        sym=ev["symbol"]; ps=prev_state.get(sym) or {}
+        armed=ps.get("armed",True)
+        if not armed and ev["vcls"]!="buy" and ev["trend"]<TREND_TH-REARM_GAP:
+            armed=True                                   # 十分に買いから離れたら再び通知可能に
+        hold=carry_link.news_hold(sym, events) if events else None
+        if hold: ev["news_hold"]=hold                    # 画面にも「保留中」を出す
+        st={"armed":armed,"last":ps.get("last")}
+        if sym in buy_syms and armed:
+            if hold:
+                print(f"[INFO] {sym} 指標前後のため通知保留: {hold['country']} {hold['title']} ({hold['min']:+d}分)")
+            elif YEN_WARN_BLOCK and yen_lv=="warn":
+                print(f"[INFO] {sym} 円高警戒のため通知停止"); st={"armed":False,"last":now_s}
+            else:
+                out.append(ev); st={"armed":False,"last":now_s}
+        nstate[sym]=st
+    for sym,ps in prev_state.items():      # 一時的に評価できなかったペアの状態も引き継ぐ（再通知の防止）
+        nstate.setdefault(sym, ps)
+    return out, nstate
+
+
 def build_status(ticker, market_open):
-    pairs=[]; notify=[]
+    pairs=[]; buys=[]
+    prev_state=_load_prev_state()
     for sym in SYMBOLS:
         ev=evaluate(sym, get_ohlc(sym))
         if not ev: continue
@@ -336,22 +394,37 @@ def build_status(ticker, market_open):
         if sw: ev.update(sw)
         pairs.append(ev)
         if market_open and ev["vcls"]=="buy":
-            stxt=(f"\n  ⏱想定保有: 利確まで{fmt_dur(ev.get('hold_tp_h'))} / 損切りまで{fmt_dur(ev.get('hold_sl_h'))}"
-                  f" / 📊TP勝率 {ev.get('tp_winrate')}%（直近{ev.get('stats_n')}回）") if ev.get("stats_n") else ""
-            swtxt=""
-            if ev.get("swap_day_yen") is not None:
-                swtxt=f"\n  💰スワップ概算(1万通貨): {ev['swap_day_yen']:+,}円/日"
-                if ev.get("combo_tp_yen") is not None:
-                    swtxt+=(f"・利確までスワップ約{ev['swap_tp_yen']:+,}円"
-                            f"\n  → 価格+スワップ 合算めやす 約{ev['combo_tp_yen']:+,}円（{ev['combo_tp_pct']:+.1f}%）")
-                if ev.get("be_days") is not None:
-                    swtxt+=(f"\n  ⚖ 損切り1回(約{ev['sl_loss_yen']:,}円/1万)をスワップで回収=約{ev['be_days']}日"
-                            f"（価格リスク≫金利。回収日数が長いほど要注意）")
-            notify.append(f"🟢 {sym} {ev['verdict']}（キャリー）\n"
-                          f"  金利差 {ev['diff']:+.2f}%（{ev['base']} {ev['foreign_rate']}% vs {ev['quote']} {ev['quote_rate']}%）/ スワップ方向: 買いで{ev['swap_sign']}\n"
-                          f"  トレンド{ev['trend']:+.2f} / 年率ボラ{ev['vol']:.1f}% / キャリー対リスク{ev['ctr']:.2f}{' ⚠高ボラ' if ev['risk'] else ''}\n"
-                          f"  現在{ev['price']} / TP {ev['tp_price']}({ev['tp_pct']:+.1f}%) / SL {ev['sl_price']}({ev['sl_pct']:+.1f}%)"
-                          + stxt + swtxt)
+            buys.append(ev)
+
+    # ---- FX Navi連携（円の強さ・指標カレンダー・FX保有）。失敗してもCarryは従来どおり動く ----
+    try:
+        link, events = carry_link.build_link(pairs)
+    except Exception as e:
+        print(f"[WARN] FX連携の作成に失敗: {e}", file=sys.stderr)
+        link, events = None, []
+    yen_lv=((link or {}).get("yen") or {}).get("level")
+    now_s=datetime.datetime.now(JST).strftime("%Y-%m-%d %H:%M")
+    targets, nstate = select_notify(pairs, buys, prev_state, events, yen_lv, now_s)
+
+    msgs=[]
+    for ev in targets:
+        sym=ev["symbol"]
+        stxt=(f"\n  ⏱想定保有: 利確まで{fmt_dur(ev.get('hold_tp_h'))} / 損切りまで{fmt_dur(ev.get('hold_sl_h'))}"
+              f" / 📊TP勝率 {ev.get('tp_winrate')}%（直近{ev.get('stats_n')}回）") if ev.get("stats_n") else ""
+        swtxt=""
+        if ev.get("swap_day_yen") is not None:
+            swtxt=f"\n  💰スワップ概算(1万通貨): {ev['swap_day_yen']:+,}円/日"
+            if ev.get("combo_tp_yen") is not None:
+                swtxt+=(f"・利確までスワップ約{ev['swap_tp_yen']:+,}円"
+                        f"\n  → 価格+スワップ 合算めやす 約{ev['combo_tp_yen']:+,}円（{ev['combo_tp_pct']:+.1f}%）")
+            if ev.get("be_days") is not None:
+                swtxt+=(f"\n  ⚖ 損切り1回(約{ev['sl_loss_yen']:,}円/1万)をスワップで回収=約{ev['be_days']}日"
+                        f"（価格リスク≫金利。回収日数が長いほど要注意）")
+        msgs.append(f"🟢 {sym} {ev['verdict']}（キャリー）\n"
+                      f"  金利差 {ev['diff']:+.2f}%（{ev['base']} {ev['foreign_rate']}% vs {ev['quote']} {ev['quote_rate']}%）/ スワップ方向: 買いで{ev['swap_sign']}\n"
+                      f"  トレンド{ev['trend']:+.2f} / 年率ボラ{ev['vol']:.1f}% / キャリー対リスク{ev['ctr']:.2f}{' ⚠高ボラ' if ev['risk'] else ''}\n"
+                      f"  現在{ev['price']} / TP {ev['tp_price']}({ev['tp_pct']:+.1f}%) / SL {ev['sl_price']}({ev['sl_pct']:+.1f}%)"
+                      + stxt + swtxt + _link_lines(ev, link))
     # ランキング（キャリー対リスク降順）
     rank=sorted([p for p in pairs if p["diff"]>0], key=lambda x:x["ctr"], reverse=True)
     ranking=[{"symbol":p["symbol"],"diff":p["diff"],"ctr":p["ctr"],"vol":p["vol"],
@@ -361,9 +434,11 @@ def build_status(ticker, market_open):
             "universe":[{"symbol":a,"role":b,"note":c} for a,b,c in UNIVERSE],
             "generated_at":datetime.datetime.now(JST).strftime("%Y-%m-%d %H:%M JST"),
             "market_open":market_open,"mode":"swing-4H","rate_asof":RATE_ASOF,
-            "jpy_rate":POLICY_RATES["JPY"],"pairs":pairs,"ranking":ranking}
-    json.dump(status, open(STATUS_FILE,"w",encoding="utf-8"), ensure_ascii=False, indent=2)
-    return notify
+            "jpy_rate":POLICY_RATES["JPY"],"pairs":pairs,"ranking":ranking,
+            "link":link,"notify_state":nstate}
+    with open(STATUS_FILE,"w",encoding="utf-8") as f:
+        json.dump(status, f, ensure_ascii=False, indent=2)
+    return msgs
 
 
 # ---------- 通知ミュート ----------
@@ -427,7 +502,8 @@ def main():
     if not market_open: print(f"[INFO] {now} 市場クローズ")
     if not notify: print(f"[INFO] {now} 通知なし"); return
     body=(f"💱 FX Carry Navi 通知\n時刻: {now}\n金利基準: {RATE_ASOF}\n\n"+"\n\n".join(notify)
-          +"\n\n※金利差・スワップは変動。キャリーは急落リスク大。自己責任で。")
+          +"\n\n※金利差・スワップは変動。キャリーは急落リスク大。自己責任で。"
+          +f"\n📊 FX Navi（主要円ペア）: {carry_link.FX_APP_URL}")
     print(body); notify_line(body); notify_mail("【Carry】買いシグナル",body)
 
 if __name__=="__main__":

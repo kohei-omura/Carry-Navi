@@ -128,6 +128,25 @@ h1{font-family:var(--serif);font-weight:700;font-size:23px;margin:0;letter-spaci
 .chip{font-family:var(--mono);font-size:11px;color:var(--mut);background:var(--s1);border:1px solid var(--line);border-radius:9px;padding:5px 9px}
 .chip b{color:var(--ink);font-weight:500}.chip b.up{color:var(--up)}.chip b.dn{color:var(--down)}
 .reasons{font-family:var(--mono);font-size:10.5px;color:var(--mut);margin-top:10px;line-height:1.8}
+/* ===== FX Navi 連携 ===== */
+.lk{padding:14px 14px 12px}
+.lkhd{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.lkhd b{font-family:var(--serif);font-size:14px;letter-spacing:.08em}
+.lkst{font-family:var(--mono);font-size:10px;color:var(--mut)}
+.lkst.ng{color:var(--amber)}
+.lkrow{margin-top:12px;padding-top:11px;border-top:1px solid var(--line)}
+.lkrow>small{display:block;font-size:10px;color:var(--mut);letter-spacing:.1em;margin-bottom:7px}
+.yl{font-family:var(--mono);font-size:10.5px;padding:3px 9px;border-radius:999px;border:1px solid var(--line2)}
+.yl.warn{color:var(--down);border-color:rgba(255,107,129,.45)}.yl.soft{color:var(--amber);border-color:rgba(240,184,90,.45)}
+.yl.tail{color:var(--up);border-color:rgba(62,230,160,.45)}.yl.neutral,.yl.unknown{color:var(--mut)}
+.nw{display:grid;grid-template-columns:76px 1fr auto;gap:8px;font-size:11.5px;padding:5px 0;align-items:center}
+.nw .t{font-family:var(--mono);color:var(--mut);font-size:10.5px}.nw .p{font-family:var(--mono);font-size:10px;color:var(--dim)}
+.nw.hot .t,.nw.hot .p{color:var(--amber)}
+.ex{display:grid;grid-template-columns:62px 1fr 92px;gap:8px;align-items:center;font-family:var(--mono);font-size:11px;padding:3px 0}
+.ex .bk{height:6px;background:var(--s2);border-radius:9px;position:relative;overflow:hidden}
+.ex .bk i{position:absolute;top:0;bottom:0;border-radius:9px}
+.ex .v{text-align:right}
+.lkw{margin-top:8px;font-size:11.5px;line-height:1.65;color:#f3d9a6}
 .riskb{margin-top:12px;font-size:11.5px;color:#ffc1ca;background:rgba(255,107,129,.07);border:1px solid rgba(255,107,129,.28);border-radius:11px;padding:9px 11px;line-height:1.6}
 .sizebox{margin-top:12px;font-size:12px;background:linear-gradient(135deg,rgba(216,181,116,.10),rgba(216,181,116,.03));border:1px solid rgba(216,181,116,.3);border-radius:13px;padding:11px 13px;line-height:1.75}
 .sizebox b{color:var(--gold2);font-family:var(--mono);font-size:16px}
@@ -221,6 +240,8 @@ h1{font-family:var(--serif);font-weight:700;font-size:23px;margin:0;letter-spaci
 <section class="tab on" id="tab-signal">
   <div id="warn"></div>
   <div class="tiles" id="tiles"></div>
+  <div class="sec">FX Navi 連携</div>
+  <div class="glass lk" id="link"></div>
   <div class="sec">金利差ランキング（キャリー対リスク順）</div>
   <div class="glass rank" id="ranking"></div>
   <div class="note">C/R＝金利差 ÷ 年率ボラ。高いほど「金利差のわりに値動きが穏やか」。過去ボラ基準のため、新興国の急落・減価(尾部)リスクは測りきれません。</div>
@@ -554,6 +575,7 @@ function card(p,i){
       </div>
       <div class="reasons">${(p.reasons||[]).join(' ／ ')}</div></details>
     ${p.risk?`<div class="riskb">⚠ ${p.risk_note||'リスク注意'}</div>`:''}
+    ${holdBadge(p)}
     <button class="btn ghost" type="button" data-reg="${p.symbol}">このペアで建玉を登録（TP/SL自動入力）</button></div>`;
 }
 const OPEN=new Set();
@@ -727,10 +749,106 @@ function render(){
   $('#mkt').innerHTML='<i></i>'+(S.market_open?'MARKET OPEN':'MARKET CLOSED');
   $('#mkt').className='pill '+(S.market_open?'open':'close');
   renderFeed();tiles();
+  try{renderLink();}catch(e){const b=$('#link');if(b)b.innerHTML='<div class="empty">連携表示エラー: '+e.message+'</div>';}
   $('#ranking').innerHTML=(S.ranking||[]).map(rankRow).join('')||'<div class="empty">データなし</div>';
   $('#pairs').innerHTML=(S.pairs||[]).map(card).join('');
   universe();fillPosSelect();renderPos();
   $('#foot').innerHTML=`判定更新 ${S.generated_at||'—'}（${S.mode||''}）・ 金利基準 ${S.rate_asof||'—'}<br>金利差・スワップは変動します。キャリー取引は急落(アンワインド)・新興国減価の尾部リスクが大きく、表示は判断補助で利益・最適値を保証しません。自己責任で。`;
+}
+
+/* ====== FX Navi 連携（円の強さ・指標カレンダー・両アプリ合計リスク）======
+   FX Navi は同じ GitHub Pages（kohei-omura.github.io）にあるので、5分ごとの status.json を直接読める。
+   読めない時は carry_status.json の link（毎時のスナップショット）で表示する。判定には影響しない。 */
+const FX_APP='https://kohei-omura.github.io/FX-Signal-Notifier/';
+const FX_SRC=['../FX-Signal-Notifier/data/status.json','https://raw.githubusercontent.com/kohei-omura/FX-Signal-Notifier/main/data/status.json'];
+const YEN_W_H4=0.6,YEN_W_H1=0.4,YEN_W_FX=0.5,YEN_WARN=0.5,YEN_SOFT=0.25,FX_STALE_MIN=90,NEWS_HOLD_MIN=30;
+const NEWS_C={TRY_JPY:['JPY','USD'],ZAR_JPY:['JPY','USD'],MXN_JPY:['JPY','USD'],HUF_JPY:['JPY','USD'],NZD_JPY:['JPY','NZD'],CAD_JPY:['JPY','CAD'],AUD_NZD:['AUD','NZD','CNY']};
+let FX=null,FX_AT=0;
+const jstMs=s=>{const t=Date.parse(String(s||'').replace(' JST','').slice(0,16).replace(' ','T')+':00+09:00');return isNaN(t)?null:t;};
+async function loadFx(){
+  for(const u of FX_SRC){
+    try{const r=await fetch(u+'?t='+Date.now(),{cache:'no-store'});if(!r.ok)continue;const j=await r.json();
+      if(j&&Array.isArray(j.pairs)){FX=j;FX_AT=Date.now();try{renderLink();}catch(e){}return;}}catch(e){}
+  }
+}
+function fxFresh(fx){const g=fx&&jstMs(fx.generated_at);return g!=null&&Date.now()-g<=FX_STALE_MIN*60e3;}
+// carry_link.py の yen_strength と同じ式（+1=円高＝キャリーの逆風）
+function yenNow(){
+  const snap=(S&&S.link&&S.link.yen)||null;
+  const fx=FX||null;if(!fx&&!S)return snap;
+  const fv=[];(fx&&fx.pairs||[]).forEach(p=>{if(!/_JPY$/.test(p.symbol||''))return;const m=p.mtf||{};
+    if(typeof m['1hour']==='number'&&typeof m['4hour']==='number')fv.push(YEN_W_H4*m['4hour']+YEN_W_H1*m['1hour']);
+    else if(typeof p.score==='number')fv.push(Math.max(-1,Math.min(1,p.score)));});
+  const cv=(S&&S.pairs||[]).filter(p=>p.quote==='JPY'&&typeof p.trend==='number').map(p=>p.trend);
+  const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
+  const fy_=fv.length&&fxFresh(fx)?-avg(fv):null,cy=cv.length?-avg(cv):null;
+  let sc=fy_!=null&&cy!=null?YEN_W_FX*fy_+(1-YEN_W_FX)*cy:(fy_!=null?fy_:cy);
+  if(sc==null)return snap||{score:null,level:'unknown',label:'判定不可'};
+  sc=Math.max(-1,Math.min(1,sc));
+  const lv=sc>=YEN_WARN?['warn','円高警戒（リスクオフ）']:sc>=YEN_SOFT?['soft','やや円高']:sc<=-YEN_SOFT?['tail','円安（キャリー追い風）']:['neutral','中立'];
+  return{score:Math.round(sc*100)/100,level:lv[0],label:lv[1],fx:fy_,carry:cy};
+}
+function newsList(){return (S&&S.link&&S.link.news)||[];}
+function newsHoldUI(sym){
+  const cs=NEWS_C[sym]||['JPY'];
+  for(const n of newsList()){const t=jstMs(n.time);if(t==null||!cs.includes(n.country))continue;
+    if(Math.abs(t-Date.now())<=NEWS_HOLD_MIN*60e3)return n;}
+  return null;
+}
+function holdBadge(p){
+  const h=newsHoldUI(p.symbol)||p.news_hold;
+  if(!h)return'';
+  return`<div class="riskb" style="color:#f3d9a6;background:rgba(240,184,90,.07);border-color:rgba(240,184,90,.35)">📅 ${FLAG[h.country]||''}${h.country} ${h.title}（${String(h.time).slice(5,16)}）の前後${NEWS_HOLD_MIN}分は新規の買い通知を保留中</div>`;
+}
+function fxPositions(){
+  if(FX&&Array.isArray(FX.open_positions))return FX.open_positions.map(p=>({symbol:p.symbol,side:p.side||'long',lot:+p.lot||0,current:p.current,entry:p.entry}));
+  return (S&&S.link&&S.link.fx_positions)||[];
+}
+// 両アプリの保有を通貨ごとの円換算エクスポージャーに分解（+=買い / −=売り）
+function exposure(){
+  const ex={},add=(c,v)=>{ex[c]=(ex[c]||0)+v;},src={};let notional=0;
+  const mark=(c,app)=>{(src[c]=src[c]||new Set()).add(app);};
+  fxPositions().forEach(p=>{const [b,q]=sp(p.symbol),px=+(p.current||p.entry)||0,n=p.lot*px*(q==='JPY'?1:qjSym(p.symbol));if(!n)return;
+    notional+=n;const s=p.side==='short'?-1:1;add(b,s*n);add(q,-s*n);mark(b,'FX');mark(q,'FX');});
+  posLoad().forEach(q=>{const [b,qq]=sp(q.sym),px=nowPrice(q.sym)||q.entry,n=q.lot*10000*px*qjSym(q.sym);if(!n)return;
+    notional+=n;add(b,n);add(qq,-n);mark(b,'Carry');mark(qq,'Carry');});
+  return{ex,src,notional};
+}
+function renderLink(){
+  const box=$('#link');if(!box||!S)return;
+  const L=S.link||{},y=yenNow()||{};
+  const fxOk=!!FX||L.fx_ok,fxGen=FX?FX.generated_at:L.fx_generated_at,fxG=jstMs(fxGen);
+  const fxAge=fxG!=null?Math.round((Date.now()-fxG)/60000):null,stale=fxAge==null||fxAge>FX_STALE_MIN;
+  // 円の強さ
+  const pos=y.score==null?50:clamp01((1-y.score)/2)*100;   // 左=円高(逆風・赤) / 右=円安(追い風・緑)
+  const yenH=`<div class="lkrow"><small>円の強さ（+円高＝キャリー逆風 / −円安＝追い風）</small>
+    <div style="display:flex;justify-content:space-between;align-items:center"><span class="yl ${y.level||'unknown'}">${y.label||'—'}</span>
+      <b class="mono" style="font-size:18px;color:${(y.score||0)>=YEN_SOFT?'var(--down)':(y.score||0)<=-YEN_SOFT?'var(--up)':'var(--ink)'}">${y.score==null?'—':(y.score>=0?'+':'')+y.score.toFixed(2)}</b></div>
+    <div class="meter"><div class="lab"><span>円高</span><span>FX 4ペア上位足 ${y.fx==null?'—':(y.fx>=0?'+':'')+(+y.fx).toFixed(2)} ・ Carry円クロス ${y.carry==null?'—':(y.carry>=0?'+':'')+(+y.carry).toFixed(2)}</span><span>円安</span></div>
+    <div class="mtrack"><u style="left:37.5%"></u><u style="left:62.5%"></u><b style="left:${pos}%"></b></div></div>
+    ${y.level==='warn'?'<div class="lkw">⚠ 円高（リスクオフ）方向。キャリーは急落(アンワインド)しやすい局面です。新規は数量を控えめに。</div>':''}</div>`;
+  // 指標
+  const nl=newsList().filter(n=>{const t=jstMs(n.time);return t!=null&&t-Date.now()>-NEWS_HOLD_MIN*60e3;}).slice(0,5);
+  const news=`<div class="lkrow"><small>直近の重要指標（キャリー対象に関係するもの・48時間）</small>
+    ${nl.length?nl.map(n=>{const t=jstMs(n.time),hot=Math.abs(t-Date.now())<=NEWS_HOLD_MIN*60e3;
+      return`<div class="nw${hot?' hot':''}"><span class="t">${n.time.slice(5).replace('-','/')}</span><span>${FLAG[n.country]||''} ${n.title}</span><span class="p">${hot?'通知保留中':n.pairs.length+'ペア'}</span></div>`;}).join('')
+      :`<div class="nw"><span class="t">—</span><span style="color:var(--mut)">${L.news_ok===false?'カレンダー未取得':'予定なし'}</span><span></span></div>`}
+    ${L.news_warn?`<div class="lkw">⚠ ${L.news_warn}</div>`:''}</div>`;
+  // 合計リスク
+  const {ex,src,notional}=exposure(),keys=Object.keys(ex).filter(k=>Math.abs(ex[k])>=1).sort((a,b)=>Math.abs(ex[b])-Math.abs(ex[a]));
+  const mx=Math.max(1,...keys.map(k=>Math.abs(ex[k])));
+  const both=keys.filter(k=>src[k]&&src[k].size>1);
+  const lev=CFG.eq>0?notional/CFG.eq:null;   // 建玉の想定元本の合計 ÷ 資金（AUD/NZDなどは1回だけ数える）
+  const risk=`<div class="lkrow"><small>両アプリ合計の通貨エクスポージャー（円換算）</small>
+    ${keys.length?keys.map(k=>{const v=ex[k],w=Math.abs(v)/mx*50;
+      return`<div class="ex"><span>${FLAG[k]||''} ${k}</span><div class="bk"><i style="${v>=0?'left:50%':'right:50%'};width:${w}%;background:${v>=0?'var(--up)':'var(--down)'}"></i></div><span class="v ${v>=0?'up':'dn'}">${v>=0?'買':'売'} ${yen(Math.abs(v))}</span></div>`;}).join('')
+      +`<div class="chips"><span class="chip">建玉合計 <b>${yen(notional)}</b></span>${lev!=null?`<span class="chip">実効レバ <b class="${lev>CFG.lev*0.6?'dn':''}">${lev.toFixed(1)}倍</b></span>`:''}<span class="chip">FX保有 <b>${fxPositions().length}</b> ・ Carry保有 <b>${posLoad().length}</b></span></div>`
+      :'<div class="nw"><span class="t">—</span><span style="color:var(--mut)">両アプリとも保有なし</span><span></span></div>'}
+    ${both.length?`<div class="lkw">🔗 ${both.map(k=>`${FLAG[k]||''}${k}${ex[k]>=0?'買い':'売り'}`).join('・')} が両アプリで重なっています。円クロスは同時に動きやすく、合計で見ると1方向に偏ります。</div>`:''}
+    ${lev!=null&&lev>CFG.lev*0.6?`<div class="lkw">⚠ 実効レバが設定上限(${CFG.lev}倍)の6割を超えています。</div>`:''}</div>`;
+  box.innerHTML=`<div class="lkhd"><b>📊 FX Navi</b><span class="lkst${fxOk&&!stale?'':' ng'}">${fxOk?(stale?'⚠ FX更新が止まっています ':'')+'更新 '+(fxAge==null?'—':fxAge+'分前'):'未取得'}</span></div>
+    ${yenH}${news}${risk}
+    <a class="btn ghost" style="text-align:center;text-decoration:none" href="${L.fx_url||FX_APP}" target="_blank" rel="noopener">FX Navi（主要円ペア）を開く ↗</a>`;
 }
 
 /* ====== ライブ計算（4時間足をWorker経由で取得→画面側で再計算。Python版と一致） ====== */
@@ -785,6 +903,15 @@ async function fetchK4(base,sym){let rows={};for(const off of [0,-1]){const path
   try{const r=await fetch(`${base}?path=${encodeURIComponent(path)}&last=260&t=${Date.now()}`,{cache:'no-store'});const j=await r.json();(j.data||[]).forEach(k=>{rows[+k.openTime]=[+k.high,+k.low,+k.close];});}catch(e){}
   if(Object.keys(rows).length>=200)break;}
   return Object.keys(rows).map(Number).sort((a,b)=>a-b).map(t=>rows[t]);}
+// 文頭を「⚡ライブ」にしないこと：FX NaviのWorkerはその文面をFXの総合判定％で絞るため、
+// 「金利差 +5.25%」の25%を判定比と誤読してLINEに届かなくなる（Carry独自の連投防止があるので絞り不要）。
+function liveLinkNote(sym){
+  const y=yenNow()||{},out=[];
+  if(y.level==='warn')out.push(`⚠ 円高警戒（円の強さ${y.score>=0?'+':''}${y.score}）キャリー急落に注意`);
+  const [b,q]=sp(sym),ov=fxPositions().filter(p=>{const [pb,pq]=sp(p.symbol),L=p.side==='short'?pq:pb,Sh=p.side==='short'?pb:pq;return L===b||Sh===q;});
+  if(ov.length)out.push('🔗 FX Navi保有と重複: '+ov.map(p=>slash(p.symbol)+(p.side==='short'?' 売り':' 買い')).join(' / '));
+  return out.length?'\n'+out.join('\n'):'';
+}
 let CARRY_BUSY=false;
 async function liveCarry(){
   if(!liveUrl()||!S||CARRY_BUSY)return;
@@ -799,9 +926,9 @@ async function liveCarry(){
       merged.bid=PRICE[sym]?PRICE[sym].bid:ev.price;merged.ask=PRICE[sym]?PRICE[sym].ask:old.ask;
       if(idx>=0)S.pairs[idx]=merged;else S.pairs.push(merged);
       const rec=notified[sym],now=Date.now();
-      if(S.market_open&&merged.vcls==='buy'){
+      if(S.market_open&&merged.vcls==='buy'&&!newsHoldUI(sym)){   // 指標の前後は保留（次の再計算で再判定）
         if((!rec||rec.v!=='buy')&&(!rec||now-rec.ts>1800000)){
-          const t=`⚡ライブ ${sym} ${merged.verdict}（キャリー）\n金利差 ${merged.diff>=0?'+':''}${merged.diff}%（${merged.base} ${merged.foreign_rate}% vs ${merged.quote} ${merged.quote_rate}%）/ スワップ買いで${merged.swap_sign}\nトレンド${merged.trend>=0?'+':''}${merged.trend} / 年率ボラ${merged.vol}% / C/R${merged.ctr}${merged.risk?' ⚠'+(merged.risk_note||''):''}\n現在${merged.bid} / TP ${merged.tp_price}(${merged.tp_pct>=0?'+':''}${merged.tp_pct}%) / SL ${merged.sl_price}(${merged.sl_pct}%)`;
+          const t=`💱Carryライブ ${sym} ${merged.verdict}（キャリー）\n金利差 ${merged.diff>=0?'+':''}${merged.diff}%（${merged.base} ${merged.foreign_rate}% vs ${merged.quote} ${merged.quote_rate}%）/ スワップ買いで${merged.swap_sign}\nトレンド${merged.trend>=0?'+':''}${merged.trend} / 年率ボラ${merged.vol}% / C/R${merged.ctr}${merged.risk?' ⚠'+(merged.risk_note||''):''}\n現在${merged.bid} / TP ${merged.tp_price}(${merged.tp_pct>=0?'+':''}${merged.tp_pct}%) / SL ${merged.sl_price}(${merged.sl_pct}%)`+liveLinkNote(sym);
           notifyLive(t);notified[sym]={v:'buy',ts:now};
         }
       }else if(rec&&rec.v==='buy'&&merged.vcls!=='buy'){notified[sym]={v:merged.vcls,ts:rec.ts};}
@@ -844,7 +971,7 @@ document.addEventListener('click',e=>{
 document.addEventListener('toggle',e=>{const d=e.target;if(d.classList&&d.classList.contains('det')){d.open?OPEN.add(d.dataset.sym):OPEN.delete(d.dataset.sym);}},true);
 
 initTabs();initWorker();initNotifyCfg();initCfg();initPos();
-load();setInterval(load,60000);setInterval(renderFeed,5000);
+load();loadFx();setInterval(load,60000);setInterval(loadFx,120000);setInterval(renderFeed,5000);
 setInterval(()=>{if(liveUrl())applyLive();},15000);
 setInterval(()=>{if(liveUrl())liveCarry();},180000);
 if('serviceWorker' in navigator){navigator.serviceWorker.register('carry-sw.js').catch(()=>{});}
