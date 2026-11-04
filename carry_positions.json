@@ -1,7 +1,7 @@
 {
-  "equity": 50000,
+  "equity": 5,
   "lev": 25,
-  "equity_at": 0,
+  "equity_at": 1793811090661,
   "equity_by": "carry",
   "positions": [
     {
