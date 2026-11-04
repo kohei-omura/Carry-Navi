@@ -1,5 +1,5 @@
 // FX Carry Navi Service Worker — シェルはcache-first、データは常に最新(network-first)
-const C='carrynavi-v2';
+const C='carrynavi-v3';
 const SHELL=['index.html','carry.webmanifest','carry-icon-180.png','carry-icon-192.png','carry-icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
