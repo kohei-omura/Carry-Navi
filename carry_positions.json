@@ -1,9 +1,9 @@
 {
-  "equity": 82311,
+  "equity": 79971,
   "lev": 25,
-  "equity_at": 1793811171478,
-  "equity_by": "fx",
+  "equity_at": 1793811713479,
+  "equity_by": "carry",
   "positions": [],
   "positions_at": 1793811622689,
-  "updated_at": "2026-11-05 02:00 JST"
+  "updated_at": "2026-11-05 02:01 JST"
 }
