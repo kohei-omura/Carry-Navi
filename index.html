@@ -263,6 +263,7 @@ h1{font-family:var(--serif);font-weight:700;font-size:23px;margin:0;letter-spaci
       <div><label>SL（損切り）</label><input id="pfSl" class="sl" type="number" inputmode="decimal" step="any"></div>
       <div class="full hint" id="pfHint">ペアと建値を入れると、TP/SLを4時間足ATRから自動で入れます（手入力で上書き可）。</div>
     </div>
+    <div class="hint" id="pfSize" style="margin-top:8px"></div>
     <button class="btn" id="pfAdd" type="button">ポジションを追加</button>
   </div>
   <div class="sec">保有中</div>
@@ -299,11 +300,20 @@ h1{font-family:var(--serif);font-weight:700;font-size:23px;margin:0;letter-spaci
   <div class="sec">資金とリスク</div>
   <div class="glass form">
     <div class="f3 f">
-      <div><label>資金（円）</label><input id="cfEq" type="number" inputmode="numeric" step="any"></div>
+      <div><label>共通資金（円）</label><input id="cfEq" type="number" inputmode="numeric" step="any"></div>
       <div><label>リスク（%）</label><input id="cfRisk" type="number" inputmode="decimal" step="0.1"></div>
       <div><label>レバ（倍）</label><input id="cfLev" type="number" inputmode="numeric" step="1"></div>
     </div>
-    <div class="hint">推奨数量は <b>リスク基準</b>（資金×リスク%÷SL幅）と <b>証拠金上限基準</b>（資金×レバ÷価格）の小さい方。AUD/NZDは円換算して計算します。入力はこの端末にのみ保存されます。</div>
+    <div class="hint">推奨数量は <b>リスク基準</b>（資金×リスク%÷SL幅）と <b>証拠金の空き</b>（共通資金からFX Navi・Carryの保有分の証拠金を差し引いた残り）の小さい方。最大数量は証拠金の空きいっぱいの数量です。AUD/NZDは円換算して計算します。</div>
+    <div class="hint" style="margin-top:6px">💡 <b>資金はFX Naviと共通（1つの財布）</b>です。両アプリに同じ金額を入れれば合算（2倍）にはなりません。どちらかで変えると、新しい方の金額がもう一方にも自動で反映されます（GitHub保存の設定が必要）。</div>
+    <div id="eqSrc" class="hint" style="margin-top:6px"></div>
+  </div>
+  <div class="sec">保有の保存（GitHub）</div>
+  <div class="glass form">
+    <div class="f"><label>GitHubトークン（Carry-Naviに書き込めるもの）</label><input id="ghTok" type="password" autocomplete="off" placeholder="github_pat_… / ghp_…"></div>
+    <div class="nbtns"><button class="nbtn go" id="ghSave" type="button">保存して同期</button><button class="nbtn" id="ghClear" type="button">解除</button></div>
+    <div class="hint" id="ghMsg" style="margin-top:10px"></div>
+    <div class="hint" style="margin-top:8px">保有ポジションと共通資金を <b>carry_positions.json</b> に保存し、FX Naviが証拠金の計算に使います。トークンが無いと保有はこの端末だけに残り、<b>FX Navi側の推奨数量にCarryの保有が反映されません</b>。FX Naviのトークンが両リポジトリに使えるなら同じものでOKです（トークンはこの端末にだけ保存）。</div>
   </div>
   <div class="sec">通知</div>
   <details class="glass ncfg" id="ncfg">
@@ -469,28 +479,37 @@ function sizing(p){
   const pYen=p.price*q;
   if(!eq||!slDist||slDist<=0||!p.price)return null;
   const kr=kellyRisk(p),useRisk=(kr!=null?kr:Number(CFG.risk))/100;
-  const byRisk=eq*useRisk/slDist,byMargin=eq*lev/pYen;
+  // 証拠金はFX Naviと共通の財布。両アプリの保有が使っている分を差し引いた「空き」までしか持てない
+  const P=pool(),byMargin=Math.max(0,P.free)*lev/pYen,maxUnits=Math.floor(byMargin/1000)*1000;
+  const byRisk=eq*useRisk/slDist;
   const units=Math.floor(Math.min(byRisk,byMargin)/1000)*1000;
-  return {units,base:byRisk<=byMargin?'リスク基準':'証拠金上限基準',marginK:pYen*1000/lev,riskYen:units*slDist,
+  return {units,maxUnits,pool:P,base:byRisk<=byMargin?'リスク基準':'証拠金の空き基準',marginK:pYen*1000/lev,riskYen:units*slDist,
     riskPct:eq?units*slDist/eq*100:0,slPips:(p.price-p.sl_price)/(isJ(p.symbol)?0.01:0.0001),slDistYen:slDist,
-    useRisk:useRisk*100,kelly:kr,swapDay:p.swap_day_yen!=null?p.swap_day_yen*units/10000:null};
+    useRisk:useRisk*100,kelly:kr,swapDay:p.swap_day_yen!=null?p.swap_day_yen*units/10000:null,
+    maxRiskYen:maxUnits*slDist,maxRiskPct:eq?maxUnits*slDist/eq*100:0};
 }
 function sizeBox(p){
   const s=sizing(p);if(!s)return'';
   if(s.kelly===0)return`<div class="sizebox warn">💴 推奨数量 <b>見送り</b>
     <small>TP勝率${p.tp_winrate}%・RR${(Math.abs(p.tp_pct)/Math.abs(p.sl_pct)).toFixed(2)} ではケリー基準が0以下（期待値マイナス）</small></div>`;
+  if(s.maxUnits<1000)return`<div class="sizebox warn">💴 推奨数量 <b>0通貨</b>
+    <small>証拠金の空きがありません（共通資金の空き ${yen(Math.max(0,s.pool.free))}・1,000通貨に ${yen(s.marginK)} 必要）</small>${poolLine(s.pool)}</div>`;
   if(s.units<1000)return`<div class="sizebox warn">💴 推奨数量 <b>0通貨</b>
-    <small>資金に対しSL幅が広すぎます（1,000通貨でもリスク ${yen(1000*s.slDistYen)}）</small></div>`;
-  return`<div class="sizebox">💴 推奨数量 <b>${s.units.toLocaleString()}通貨</b>
+    <small>資金に対しSL幅が広すぎます（1,000通貨でもリスク ${yen(1000*s.slDistYen)}）／ 最大 ${s.maxUnits.toLocaleString()}通貨</small>${poolLine(s.pool)}</div>`;
+  return`<div class="sizebox">💴 推奨数量 <b>${s.units.toLocaleString()}通貨</b> <span style="font-size:11.5px;color:var(--mut)">／ 最大 <b style="color:var(--amber)">${s.maxUnits.toLocaleString()}通貨</b></span>
+    <small>最大＝証拠金の空きいっぱい（リスク ${yen(s.maxRiskYen)}＝資金の${s.maxRiskPct.toFixed(1)}%）。少しの逆行でロスカットに近づくため、上限の目安です</small>
     <small>${s.base} ／ 証拠金 ${yen(s.marginK)}/千通貨 ／ リスク ${yen(s.riskYen)}（資金の${s.riskPct.toFixed(1)}%）／ SL ${s.slPips.toFixed(1)}pips</small>
     ${s.kelly!=null?`<small class="kel">🎯 適用リスク ${s.useRisk.toFixed(2)}%（1/4ケリー・上限${CFG.risk}%）</small>`:''}
     ${s.swapDay!=null?`<small class="kel">💰 この数量のスワップ概算 <b class="${s.swapDay>=0?'up':'dn'}">${sg(s.swapDay)}${Math.abs(Math.round(s.swapDay)).toLocaleString()}円/日</b></small>`:''}
+    ${poolLine(s.pool)}
   </div>`;
 }
 function initCfg(){
   cfgLoad();
   const bind=(id,key,d)=>{const el=$(id);el.value=CFG[key];
-    el.addEventListener('input',()=>{const v=Number(el.value);if(!isNaN(v)&&v>0){CFG[key]=d?v:Math.round(v);cfgSave();render();}});};
+    el.addEventListener('input',()=>{const v=Number(el.value);if(!isNaN(v)&&v>0){CFG[key]=d?v:Math.round(v);
+      if(key==='eq'||key==='lev'){CFG.eq_at=Date.now();CFG.eq_by='carry';schedulePush();}   // 共通資金はFX Naviと共有
+      cfgSave();render();}});};
   bind('#cfEq','eq');bind('#cfRisk','risk',true);bind('#cfLev','lev');
 }
 
@@ -605,7 +624,9 @@ function universe(){
 /* ====== 保有ポジション（TP/SL付き）====== */
 const POS_KEY='carry_positions';
 function posLoad(){try{return JSON.parse(localStorage.getItem(POS_KEY))||[]}catch(e){return[]}}
-function posSave(a){try{localStorage.setItem(POS_KEY,JSON.stringify(a))}catch(e){}renderPos();}
+function posSave(a){try{localStorage.setItem(POS_KEY,JSON.stringify(a));localStorage.setItem(POS_AT_KEY,String(Date.now()));}catch(e){}schedulePush();if(S)render();else renderPos();}   // 証拠金の空きが変わるので推奨数量も描き直す
+const POS_AT_KEY='carry_positions_at';
+function posAt(){try{return Number(localStorage.getItem(POS_AT_KEY))||0}catch(e){return 0}}
 function findPair(sym){return (S&&S.pairs||[]).find(p=>p.symbol===sym)||null;}
 function nowPrice(sym){const p=findPair(sym);return PRICE[sym]?PRICE[sym].bid:(p?(p.bid!=null?p.bid:p.price):null);}
 function posTpSl(q,p){
@@ -692,9 +713,9 @@ function prefillEntry(){
 function initPos(){
   const sel=$('#pfSym');
   $('#pfDate').value=new Date(Date.now()+324e5).toISOString().slice(0,10);
-  sel.onchange=prefillEntry;
+  sel.onchange=()=>{prefillEntry();renderPfSize();};
   $('#pfEntry').addEventListener('input',()=>{tpDirty=slDirty=false;autoTpSl();});
-  $('#pfLot').addEventListener('input',autoTpSl);
+  $('#pfLot').addEventListener('input',()=>{autoTpSl();renderPfSize();});
   $('#pfTp').addEventListener('input',()=>{tpDirty=true;autoTpSl();});
   $('#pfSl').addEventListener('input',()=>{slDirty=true;autoTpSl();});
   $('#pfAdd').onclick=()=>{
@@ -752,8 +773,124 @@ function render(){
   try{renderLink();}catch(e){const b=$('#link');if(b)b.innerHTML='<div class="empty">連携表示エラー: '+e.message+'</div>';}
   $('#ranking').innerHTML=(S.ranking||[]).map(rankRow).join('')||'<div class="empty">データなし</div>';
   $('#pairs').innerHTML=(S.pairs||[]).map(card).join('');
-  universe();fillPosSelect();renderPos();
+  universe();fillPosSelect();renderPos();try{renderPfSize();renderEqSrc();}catch(e){}
   $('#foot').innerHTML=`判定更新 ${S.generated_at||'—'}（${S.mode||''}）・ 金利基準 ${S.rate_asof||'—'}<br>金利差・スワップは変動します。キャリー取引は急落(アンワインド)・新興国減価の尾部リスクが大きく、表示は判断補助で利益・最適値を保証しません。自己責任で。`;
+}
+
+/* ====== 共通資金（FX Naviと1つの財布）と保有のGitHub保存 ======
+   ・carry_positions.json … Carryの保有と共通資金。FX Naviがこれを読んで証拠金の空きを計算する
+   ・FX-Signal-Notifier/data/positions.json … FXの保有（公開）。ここから証拠金の使用分を計算
+   ・FX-Signal-Notifier/data/account.json   … FX側で入れた共通資金。新しい方を採用する */
+const SHARE_FILE='carry_positions.json',GH_OWNER='kohei-omura',GH_REPO='Carry-Navi';
+const FXF=(f)=>['../FX-Signal-Notifier/data/'+f,'https://raw.githubusercontent.com/kohei-omura/FX-Signal-Notifier/main/data/'+f];
+let FXPOS=null,FXACC=null,SHARED=null,SYNC={st:'',msg:''},PUSH_T=null;
+function ghTok(){
+  try{const v=localStorage.getItem('carry_gh');if(v)return v;}catch(e){}
+  try{const f=JSON.parse(localStorage.getItem('fxnavi_gh')||'{}');if(f&&f.token)return f.token;}catch(e){}   // 同じブラウザならFX Naviのトークンを流用
+  return'';
+}
+const ghH=t=>({Authorization:'Bearer '+t,Accept:'application/vnd.github+json'});
+const b64e=o=>btoa(unescape(encodeURIComponent(JSON.stringify(o,null,2))));
+const b64d=s=>JSON.parse(decodeURIComponent(escape(atob(String(s).replace(/\n/g,'')))));
+async function getJson(urls){for(const u of urls){try{const r=await fetch(u+(u.includes('?')?'&':'?')+'t='+Date.now(),{cache:'no-store'});if(r.ok)return await r.json();}catch(e){}}return null;}
+function sharedBody(){return{equity:+CFG.eq||0,lev:+CFG.lev||25,equity_at:CFG.eq_at||0,equity_by:CFG.eq_by||'carry',
+  positions:posLoad(),positions_at:posAt(),updated_at:new Date(Date.now()+9*3600e3).toISOString().slice(0,16).replace('T',' ')+' JST'};}
+function schedulePush(){
+  if(!ghTok()){SYNC={st:'local',msg:'GitHub未設定：保有はこの端末だけ（FX Naviの計算に入りません）'};renderSync();return;}
+  clearTimeout(PUSH_T);PUSH_T=setTimeout(pushShared,1200);
+}
+async function pushShared(retry){
+  const t=ghTok();if(!t)return;
+  const url=`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${SHARE_FILE}`;
+  SYNC={st:'busy',msg:'保存中…'};renderSync();
+  try{
+    let sha;const g=await fetch(url+'?ref=main&t='+Date.now(),{headers:ghH(t),cache:'no-store'});
+    if(g.ok)sha=(await g.json()).sha;else if(g.status!==404)throw new Error('読込 '+g.status);
+    const body=sharedBody();
+    const r=await fetch(url,{method:'PUT',headers:{...ghH(t),'Content-Type':'application/json'},
+      body:JSON.stringify({message:'carry: 保有・共通資金を更新 [skip ci]',content:b64e(body),sha,branch:'main'})});
+    if((r.status===409||r.status===422)&&!retry)return pushShared(true);   // 同時更新の衝突は1回だけ取り直す
+    if(!r.ok)throw new Error('保存 '+r.status+(r.status===401||r.status===403||r.status===404?'（トークンの権限を確認）':''));
+    SHARED=body;SYNC={st:'ok',msg:'✔ 保存しました '+jstNow()};
+  }catch(e){SYNC={st:'err',msg:'✖ 保存できません：'+(e.message||e)};}
+  renderSync();
+}
+async function readOwnFile(){
+  const t=ghTok();
+  if(t){try{const r=await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${SHARE_FILE}?ref=main&t=${Date.now()}`,{headers:ghH(t),cache:'no-store'});
+    if(r.ok)return b64d((await r.json()).content);if(r.status===404)return{_missing:true};}catch(e){}}
+  return await getJson([SHARE_FILE]);
+}
+function adoptEquity(eq,lev,at,by){
+  if(!(eq>0)||!(at>(CFG.eq_at||0)))return false;
+  CFG.eq=eq;if(lev>0)CFG.lev=lev;CFG.eq_at=at;CFG.eq_by=by;cfgSave();
+  const a=$('#cfEq'),b=$('#cfLev');if(a&&document.activeElement!==a)a.value=CFG.eq;if(b&&document.activeElement!==b)b.value=CFG.lev;
+  return true;
+}
+async function pullShared(){
+  const f=await readOwnFile();
+  if(f&&!f._missing){
+    SHARED=f;
+    if((f.positions_at||0)>posAt()&&Array.isArray(f.positions)){   // 他の端末で更新された保有を取り込む
+      try{localStorage.setItem(POS_KEY,JSON.stringify(f.positions));localStorage.setItem(POS_AT_KEY,String(f.positions_at));}catch(e){}
+    }
+    adoptEquity(+f.equity,+f.lev,+f.equity_at||0,f.equity_by||'carry');
+    if(ghTok()&&posAt()>(f.positions_at||0))schedulePush();         // この端末の方が新しければ送る
+  }else if(ghTok()&&(posLoad().length||CFG.eq_at)){schedulePush();}  // 初回：まだファイルが無い
+  const acc=await getJson(FXF('account.json'));
+  if(acc){FXACC=acc;if(adoptEquity(+acc.equity,+acc.lev,+acc.equity_at||0,'fx')&&ghTok())schedulePush();}
+  const fp=await getJson(FXF('positions.json'));
+  if(fp&&Array.isArray(fp.positions))FXPOS=fp.positions.filter(p=>(p.status||'open')==='open');
+  if(!SYNC.st)SYNC=ghTok()?{st:'ok',msg:'✔ 同期中'}:{st:'local',msg:'GitHub未設定：保有はこの端末だけ（FX Naviの計算に入りません）'};
+  renderSync();render();
+}
+function renderSync(){
+  const m=$('#ghMsg');if(m)m.innerHTML=`<span class="${SYNC.st==='err'||SYNC.st==='local'?'dn':SYNC.st==='ok'?'up':''}">${SYNC.msg||''}</span>`;
+}
+function initSync(){
+  const i=$('#ghTok');if(!i)return;
+  try{i.value=localStorage.getItem('carry_gh')||'';}catch(e){}
+  $('#ghSave').onclick=async()=>{const v=i.value.trim();if(!v){$('#ghMsg').textContent='トークンを入れてください。';return;}
+    try{localStorage.setItem('carry_gh',v);}catch(e){}SYNC={st:'',msg:''};await pullShared();await pushShared();};
+  $('#ghClear').onclick=()=>{try{localStorage.removeItem('carry_gh');}catch(e){}i.value='';SYNC={st:'',msg:''};schedulePush();};
+  renderSync();
+}
+// FX Naviの保有（positions.json が最新。読めなければ status.json の要約）
+function fxOpenList(){
+  const src=FXPOS||(FX&&FX.open_positions)||(S&&S.link&&S.link.fx_positions)||[];
+  return src.map(p=>({symbol:p.symbol,side:p.side||'long',lot:+(p.lot!=null?p.lot:10000),entry:+p.entry,current:p.current}));
+}
+function fxPx(sym,side){
+  const L=PRICE[sym];if(L)return side==='short'?(L.ask||L.bid):L.bid;
+  const f=FX&&(FX.pairs||[]).find(x=>x.symbol===sym);if(f)return side==='short'?(f.ask||f.bid):f.bid;
+  return null;
+}
+// 共通資金の使用状況。空き＝資金＋含み損益(両アプリ)−必要証拠金(両アプリ)
+function pool(){
+  const eq=+CFG.eq||0,lev=+CFG.lev||25;let mFx=0,mCa=0,plFx=0,plCa=0;
+  fxOpenList().forEach(p=>{const px=fxPx(p.symbol,p.side)||p.current||p.entry,q=qjSym(p.symbol);if(!px||!p.lot)return;
+    mFx+=p.lot*px*q/lev;plFx+=(p.side==='short'?-1:1)*(px-p.entry)*p.lot*q;});
+  posLoad().forEach(q=>{const px=nowPrice(q.sym)||q.entry,qq=qjSym(q.sym),u=q.lot*10000;if(!px)return;
+    mCa+=u*px*qq/lev;plCa+=(px-q.entry)*u*qq;});
+  const used=mFx+mCa,free=eq+plFx+plCa-used;
+  return{eq,lev,mFx,mCa,plFx,plCa,used,free,rate:used>0?(eq+plFx+plCa)/used*100:null,nFx:fxOpenList().length,nCa:posLoad().length};
+}
+function poolLine(P){
+  return`<small class="kel">👛 共通資金 ${yen(P.eq)} ／ 空き <b class="${P.free>0?'up':'dn'}">${yen(Math.max(0,P.free))}</b>（FX Navi使用 ${yen(P.mFx)}・Carry使用 ${yen(P.mCa)}${P.plFx+P.plCa?'・含み '+fy(P.plFx+P.plCa):''}）</small>`;
+}
+function renderPfSize(){
+  const el=$('#pfSize');if(!el||!S)return;const p=findPair($('#pfSym').value);if(!p){el.innerHTML='';return;}
+  const s=sizing(p);if(!s){el.innerHTML='';return;}
+  const want=(Number($('#pfLot').value)||0)*10000;
+  el.innerHTML=`👛 ${slash(p.symbol)}：推奨 <b>${(s.kelly===0?0:s.units).toLocaleString()}通貨</b> ／ 最大 <b style="color:var(--amber)">${s.maxUnits.toLocaleString()}通貨</b>（共通資金の空き ${yen(Math.max(0,s.pool.free))}）`
+    +(want>s.maxUnits?`<br><span class="dn">⚠ 入力の${want.toLocaleString()}通貨は証拠金の空きを超えています</span>`:'');
+}
+function renderEqSrc(){
+  const el=$('#eqSrc');if(!el)return;
+  const at=CFG.eq_at?new Date(CFG.eq_at+9*3600e3).toISOString().slice(5,16).replace('T',' '):null;
+  let t=at?`現在の共通資金 <b>${yen(CFG.eq)}</b>（${CFG.eq_by==='fx'?'FX Navi':'Carry Navi'}で ${at} に設定）`:'';
+  if(FXACC&&+FXACC.equity>0&&+FXACC.equity!==+CFG.eq)t+=`<br><span class="dn">⚠ FX Naviの資金は ${yen(FXACC.equity)} です。どちらかに揃えてください（新しく入れた方が反映されます）</span>`;
+  el.innerHTML=t;
 }
 
 /* ====== FX Navi 連携（円の強さ・指標カレンダー・両アプリ合計リスク）======
@@ -808,7 +945,7 @@ function fxPositions(){
 function exposure(){
   const ex={},add=(c,v)=>{ex[c]=(ex[c]||0)+v;},src={};let notional=0;
   const mark=(c,app)=>{(src[c]=src[c]||new Set()).add(app);};
-  fxPositions().forEach(p=>{const [b,q]=sp(p.symbol),px=+(p.current||p.entry)||0,n=p.lot*px*(q==='JPY'?1:qjSym(p.symbol));if(!n)return;
+  fxOpenList().forEach(p=>{const [b,q]=sp(p.symbol),px=+(fxPx(p.symbol,p.side)||p.current||p.entry)||0,n=p.lot*px*(q==='JPY'?1:qjSym(p.symbol));if(!n)return;
     notional+=n;const s=p.side==='short'?-1:1;add(b,s*n);add(q,-s*n);mark(b,'FX');mark(q,'FX');});
   posLoad().forEach(q=>{const [b,qq]=sp(q.sym),px=nowPrice(q.sym)||q.entry,n=q.lot*10000*px*qjSym(q.sym);if(!n)return;
     notional+=n;add(b,n);add(qq,-n);mark(b,'Carry');mark(qq,'Carry');});
@@ -842,12 +979,18 @@ function renderLink(){
   const risk=`<div class="lkrow"><small>両アプリ合計の通貨エクスポージャー（円換算）</small>
     ${keys.length?keys.map(k=>{const v=ex[k],w=Math.abs(v)/mx*50;
       return`<div class="ex"><span>${FLAG[k]||''} ${k}</span><div class="bk"><i style="${v>=0?'left:50%':'right:50%'};width:${w}%;background:${v>=0?'var(--up)':'var(--down)'}"></i></div><span class="v ${v>=0?'up':'dn'}">${v>=0?'買':'売'} ${yen(Math.abs(v))}</span></div>`;}).join('')
-      +`<div class="chips"><span class="chip">建玉合計 <b>${yen(notional)}</b></span>${lev!=null?`<span class="chip">実効レバ <b class="${lev>CFG.lev*0.6?'dn':''}">${lev.toFixed(1)}倍</b></span>`:''}<span class="chip">FX保有 <b>${fxPositions().length}</b> ・ Carry保有 <b>${posLoad().length}</b></span></div>`
+      +`<div class="chips"><span class="chip">建玉合計 <b>${yen(notional)}</b></span>${lev!=null?`<span class="chip">実効レバ <b class="${lev>CFG.lev*0.6?'dn':''}">${lev.toFixed(1)}倍</b></span>`:''}<span class="chip">FX保有 <b>${fxOpenList().length}</b> ・ Carry保有 <b>${posLoad().length}</b></span></div>`
       :'<div class="nw"><span class="t">—</span><span style="color:var(--mut)">両アプリとも保有なし</span><span></span></div>'}
     ${both.length?`<div class="lkw">🔗 ${both.map(k=>`${FLAG[k]||''}${k}${ex[k]>=0?'買い':'売り'}`).join('・')} が両アプリで重なっています。円クロスは同時に動きやすく、合計で見ると1方向に偏ります。</div>`:''}
     ${lev!=null&&lev>CFG.lev*0.6?`<div class="lkw">⚠ 実効レバが設定上限(${CFG.lev}倍)の6割を超えています。</div>`:''}</div>`;
+  const P=pool(),uPct=P.eq>0?Math.min(100,P.used/P.eq*100):0;
+  const poolH=`<div class="lkrow"><small>共通資金（FX Navi と1つの財布）</small>
+    <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px"><span>資金 ${yen(P.eq)}</span><span>空き <b class="${P.free>0?'up':'dn'}">${yen(Math.max(0,P.free))}</b></span></div>
+    <div class="ex" style="grid-template-columns:1fr"><div class="bk"><i style="left:0;width:${P.eq>0?Math.min(100,P.mFx/P.eq*100):0}%;background:var(--blue)"></i><i style="left:${P.eq>0?Math.min(100,P.mFx/P.eq*100):0}%;width:${P.eq>0?Math.min(100,P.mCa/P.eq*100):0}%;background:var(--gold)"></i></div></div>
+    <div class="chips"><span class="chip">FX使用 <b>${yen(P.mFx)}</b></span><span class="chip">Carry使用 <b>${yen(P.mCa)}</b></span>${P.rate!=null?`<span class="chip">証拠金維持率 <b class="${P.rate<200?'dn':''}">${Math.round(P.rate)}%</b></span>`:''}</div>
+    ${uPct>=80?'<div class="lkw">⚠ 共通資金の8割以上を証拠金に使っています。新規は控えめに。</div>':''}</div>`;
   box.innerHTML=`<div class="lkhd"><b>📊 FX Navi</b><span class="lkst${fxOk&&!stale?'':' ng'}">${fxOk?(stale?'⚠ FX更新が止まっています ':'')+'更新 '+(fxAge==null?'—':fxAge+'分前'):'未取得'}</span></div>
-    ${yenH}${news}${risk}
+    ${poolH}${yenH}${news}${risk}
     <a class="btn ghost" style="text-align:center;text-decoration:none" href="${L.fx_url||FX_APP}" target="_blank" rel="noopener">FX Navi（主要円ペア）を開く ↗</a>`;
 }
 
@@ -970,8 +1113,8 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('toggle',e=>{const d=e.target;if(d.classList&&d.classList.contains('det')){d.open?OPEN.add(d.dataset.sym):OPEN.delete(d.dataset.sym);}},true);
 
-initTabs();initWorker();initNotifyCfg();initCfg();initPos();
-load();loadFx();setInterval(load,60000);setInterval(loadFx,120000);setInterval(renderFeed,5000);
+initTabs();initWorker();initNotifyCfg();initCfg();initPos();initSync();
+load();loadFx();pullShared();setInterval(load,60000);setInterval(loadFx,120000);setInterval(pullShared,120000);setInterval(renderFeed,5000);
 setInterval(()=>{if(liveUrl())applyLive();},15000);
 setInterval(()=>{if(liveUrl())liveCarry();},180000);
 if('serviceWorker' in navigator){navigator.serviceWorker.register('carry-sw.js').catch(()=>{});}
