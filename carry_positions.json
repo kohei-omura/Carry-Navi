@@ -3,14 +3,7 @@
   "lev": 25,
   "equity_at": 1793811171478,
   "equity_by": "fx",
-  "positions": [
-    {
-      "sym": "CAD_JPY",
-      "entry": 113.565,
-      "lot": 1,
-      "date": "2026-11-04"
-    }
-  ],
-  "positions_at": 0,
-  "updated_at": "2026-11-05 01:56 JST"
+  "positions": [],
+  "positions_at": 1793811622689,
+  "updated_at": "2026-11-05 02:00 JST"
 }
