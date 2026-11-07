@@ -1,5 +1,5 @@
 {
-  "price_ts": "2026-11-07T16:17:16.899086Z",
+  "price_ts": "2026-11-07T20:47:31.754404Z",
   "rates": {
     "JPY": 1.25,
     "TRY": 36.0,
@@ -132,7 +132,7 @@
       "note": "GMOコインAPIに無く価格取得不可"
     }
   ],
-  "generated_at": "2026-11-08 01:17 JST",
+  "generated_at": "2026-11-08 05:47 JST",
   "market_open": false,
   "mode": "swing-4H",
   "rate_asof": "2026-11-04",
@@ -1860,8 +1860,8 @@
   ],
   "link": {
     "fx_ok": true,
-    "fx_generated_at": "2026-11-08 01:16 JST",
-    "fx_age_min": 1,
+    "fx_generated_at": "2026-11-08 05:46 JST",
+    "fx_age_min": 2,
     "fx_stale": false,
     "fx_mode": "mtf",
     "fx_url": "https://kohei-omura.github.io/FX-Signal-Notifier/",
