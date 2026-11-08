@@ -1,5 +1,5 @@
 {
-  "price_ts": "2026-11-08T07:09:59.51889Z",
+  "price_ts": "2026-11-08T14:59:20.364158Z",
   "rates": {
     "JPY": 1.25,
     "TRY": 36.0,
@@ -132,7 +132,7 @@
       "note": "GMOコインAPIに無く価格取得不可"
     }
   ],
-  "generated_at": "2026-11-08 16:10 JST",
+  "generated_at": "2026-11-08 23:59 JST",
   "market_open": false,
   "mode": "swing-4H",
   "rate_asof": "2026-11-04",
@@ -1860,7 +1860,7 @@
   ],
   "link": {
     "fx_ok": true,
-    "fx_generated_at": "2026-11-08 16:06 JST",
+    "fx_generated_at": "2026-11-08 23:55 JST",
     "fx_age_min": 4,
     "fx_stale": false,
     "fx_mode": "mtf",
