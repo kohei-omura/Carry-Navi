@@ -328,13 +328,68 @@ def swap_estimate(price, diff, hold_tp_h, tp_price, sl_price=None, qjpy=1.0):
     return out
 
 
-def _load_prev_state():
+def _load_prev_state(key="notify_state"):
     """前回の carry_status.json から通知状態を読む（無ければ空）。"""
     try:
         with open(STATUS_FILE, encoding="utf-8") as f:
-            return (json.load(f) or {}).get("notify_state") or {}
+            return (json.load(f) or {}).get(key) or {}
     except Exception:
         return {}
+
+
+# ---------- 保有ポジションの TP/SL 到達通知 ----------
+# 画面（PWA）で登録し GitHub に保存された carry_positions.json を毎時の実行で読み、
+# 現在値（買いの決済＝Bid）が TP 以上 / SL 以下になったら、そのポジションにつき1回だけ通知する。
+# TP/SL を編集すると別の通知として扱う（キーに TP/SL を含める）。市場クローズ中は判定しない。
+POS_FILE = "carry_positions.json"
+
+def load_positions(path=POS_FILE):
+    try:
+        with open(path, encoding="utf-8") as f:
+            ps = (json.load(f) or {}).get("positions") or []
+        return ps if isinstance(ps, list) else []
+    except Exception:
+        return []
+
+def _pos_key(q):
+    return "|".join(str(q.get(k)) for k in ("sym", "entry", "date", "lot", "tp", "sl"))
+
+def _fmt_px(sym, x):
+    return f"{x:.3f}" if sym.endswith("_JPY") else f"{x:.5f}"
+
+def check_positions(positions, ticker, prev, market_open, now_s):
+    """戻り値: (通知文のリスト, 次回へ引き継ぐ状態)。状態は {キー: {"tp": 時刻, "sl": 時刻}}"""
+    msgs, state = [], {}
+    for q in positions:
+        try:
+            sym = str(q["sym"]); entry = float(q["entry"]); lot = float(q.get("lot") or 1)
+            tp = float(q["tp"]) if q.get("tp") not in (None, "") else None
+            sl = float(q["sl"]) if q.get("sl") not in (None, "") else None
+        except (KeyError, TypeError, ValueError):
+            continue
+        k = _pos_key(q); st = dict(prev.get(k) or {})
+        bid = (ticker.get(sym) or {}).get("bid")
+        if market_open and bid is not None:
+            hit = "tp" if (tp is not None and bid >= tp) else ("sl" if (sl is not None and bid <= sl) else None)
+            if hit and not st.get(hit):
+                quote = sym.split("_")[1]
+                qj = 1.0 if quote == "JPY" else ((ticker.get(f"{quote}_JPY") or {}).get("bid") or 1.0)
+                pl = (bid - entry) * lot * 10000 * qj
+                lv = tp if hit == "tp" else sl
+                head = "🎯 TP到達" if hit == "tp" else "⚠ SL到達"
+                act = "利確を検討" if hit == "tp" else "損切りを検討"
+                msgs.append(f"{head} {sym.replace('_','/')} 買い{lot:g}万通貨（建値 {_fmt_px(sym, entry)}）\n"
+                            f"  現在 {_fmt_px(sym, bid)} / {'TP' if hit == 'tp' else 'SL'} {_fmt_px(sym, lv)}"
+                            f" → 値幅損益めやす {pl:+,.0f}円（スワップ別）— {act}")
+                st[hit] = now_s
+        state[k] = st
+    return msgs, state
+
+
+def compose_subject(msgs):
+    pos = any(m.startswith(("🎯", "⚠ SL")) for m in msgs)
+    sig = any(m.startswith("🟢") for m in msgs)
+    return "【Carry】" + ("買いシグナル・TP/SL到達" if pos and sig else "TP/SL到達" if pos else "買いシグナル")
 
 
 def _link_lines(ev, link):
@@ -405,6 +460,7 @@ def build_status(ticker, market_open):
     yen_lv=((link or {}).get("yen") or {}).get("level")
     now_s=datetime.datetime.now(JST).strftime("%Y-%m-%d %H:%M")
     targets, nstate = select_notify(pairs, buys, prev_state, events, yen_lv, now_s)
+    pos_msgs, pstate = check_positions(load_positions(), ticker, _load_prev_state("pos_state"), market_open, now_s)
 
     msgs=[]
     for ev in targets:
@@ -435,10 +491,10 @@ def build_status(ticker, market_open):
             "generated_at":datetime.datetime.now(JST).strftime("%Y-%m-%d %H:%M JST"),
             "market_open":market_open,"mode":"swing-4H","rate_asof":RATE_ASOF,
             "jpy_rate":POLICY_RATES["JPY"],"pairs":pairs,"ranking":ranking,
-            "link":link,"notify_state":nstate}
+            "link":link,"notify_state":nstate,"pos_state":pstate}
     with open(STATUS_FILE,"w",encoding="utf-8") as f:
         json.dump(status, f, ensure_ascii=False, indent=2)
-    return msgs
+    return pos_msgs + msgs          # 保有のTP/SL到達を先頭に（行動が必要なため）
 
 
 # ---------- 通知ミュート ----------
@@ -504,7 +560,7 @@ def main():
     body=(f"💱 FX Carry Navi 通知\n時刻: {now}\n金利基準: {RATE_ASOF}\n\n"+"\n\n".join(notify)
           +"\n\n※金利差・スワップは変動。キャリーは急落リスク大。自己責任で。"
           +f"\n📊 FX Navi（主要円ペア）: {carry_link.FX_APP_URL}")
-    print(body); notify_line(body); notify_mail("【Carry】買いシグナル",body)
+    print(body); notify_line(body); notify_mail(compose_subject(notify),body)
 
 if __name__=="__main__":
     main()
