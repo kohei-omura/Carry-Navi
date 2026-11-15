@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#07090d;--s1:rgba(255,255,255,.035);--s2:rgba(255,255,255,.06);--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.14);
---ink:#eef1f6;--mut:#8b96a8;--dim:#5d6778;--gold:#d8b574;--gold2:#f2dcaa;--up:#3ee6a0;--down:#ff6b81;--amber:#f0b85a;--blue:#6ab0ff;
+--ink:#eef1f6;--mut:#8b96a8;--dim:#727d90;--gold:#d8b574;--gold2:#f2dcaa;--up:#3ee6a0;--down:#ff6b81;--amber:#f0b85a;--blue:#6ab0ff;
 --mono:'IBM Plex Mono',ui-monospace,monospace;--serif:'Shippori Mincho',serif;--r:18px}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{background:var(--bg)}
@@ -220,6 +220,30 @@ h1{font-family:var(--serif);font-weight:700;font-size:23px;margin:0;letter-spaci
 .tb{background:none;border:0;color:var(--mut);padding:8px 0 6px;border-radius:16px;font-size:10.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;letter-spacing:.04em}
 .tb svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .tb.on{color:#1a1307;background:linear-gradient(180deg,var(--gold2),var(--gold));font-weight:700;box-shadow:0 4px 16px rgba(216,181,116,.35)}
+/* ===== 仕上げ（数字の桁そろえ・操作感・アクセシビリティ・PC幅） ===== */
+body{font-feature-settings:"palt" 1}
+.mono,.bidbig,.crbig,.pnl,.tile b,.m b,.chip b,.tpsl b,.lrow,.lsub,.askline,.crlab,.rnum,.pill,.hint,.ex,.nw .t,
+.pf input,.f input{font-variant-numeric:tabular-nums}
+.btn,.nbtn,.tb,.pdel,.pedit,.rrow,.ur[data-go]{transition:transform .12s ease,background .2s,box-shadow .2s,color .2s}
+.nbtn:active,.pdel:active,.pedit:active,.tb:active{transform:scale(.96)}
+.pdel:hover,.pedit:hover,.nbtn:hover{border-color:var(--gold);color:var(--ink)}
+.ur[data-go]:active{background:var(--s2)}
+:where(button,a,select,input,summary,.rrow,[data-go]):focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:12px}
+.card{scroll-margin-top:14px}
+@media (min-width:1000px){
+  .wrap{max-width:1120px}
+  header{padding-top:18px}
+  #tab-signal.on{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:18px;align-items:start;
+    grid-template-areas:"warn warn" "tiles tiles" "sfx srk" "lk rk" "lk nt" "sp sp" "pr pr"}
+  #warn{grid-area:warn}#tiles{grid-area:tiles}#secFx{grid-area:sfx}#secRank{grid-area:srk}#link{grid-area:lk}
+  #ranking{grid-area:rk}#rankNote{grid-area:nt}#secPairs{grid-area:sp}#pairs{grid-area:pr}
+  #tab-signal>#pairs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+  #tab-signal>#pairs>.card{margin-bottom:0}
+  #tab-pos,#tab-pairs,#tab-set{max-width:640px;margin:0 auto}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
 </style></head>
 <body><div class="wrap">
 <header>
@@ -240,12 +264,12 @@ h1{font-family:var(--serif);font-weight:700;font-size:23px;margin:0;letter-spaci
 <section class="tab on" id="tab-signal">
   <div id="warn"></div>
   <div class="tiles" id="tiles"></div>
-  <div class="sec">FX Navi 連携</div>
+  <div class="sec" id="secFx">FX Navi 連携</div>
   <div class="glass lk" id="link"></div>
-  <div class="sec">金利差ランキング（キャリー対リスク順）</div>
+  <div class="sec" id="secRank">金利差ランキング（キャリー対リスク順）</div>
   <div class="glass rank" id="ranking"></div>
-  <div class="note">C/R＝金利差 ÷ 年率ボラ。高いほど「金利差のわりに値動きが穏やか」。過去ボラ基準のため、新興国の急落・減価(尾部)リスクは測りきれません。</div>
-  <div class="sec">ペア別シグナル</div>
+  <div class="note" id="rankNote">C/R＝金利差 ÷ 年率ボラ。高いほど「金利差のわりに値動きが穏やか」。過去ボラ基準のため、新興国の急落・減価(尾部)リスクは測りきれません。</div>
+  <div class="sec" id="secPairs">ペア別シグナル</div>
   <div id="pairs"></div>
 </section>
 
@@ -736,6 +760,7 @@ function fillPosSelect(){
   sel.dataset.sig=syms.join();
   sel.innerHTML=syms.map(s=>`<option value="${s}">${slash(s)}</option>`).join('');
   if(syms.includes(cur))sel.value=cur;
+  if(!$('#pfEntry').value)prefillEntry();   // 初回表示でも建値(Ask)とTP/SLを入れておく
 }
 function gotoReg(sym){
   setTab('pos');$('#pfSym').value=sym;prefillEntry();
