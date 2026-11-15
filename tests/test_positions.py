@@ -58,5 +58,39 @@ class TpSl(unittest.TestCase):
         self.assertEqual(C.compose_subject(["⚠ SL到達 x", "🟢 y"]), "【Carry】買いシグナル・TP/SL到達")
 
 
+class ExitAlert(unittest.TestCase):
+    """保有中のペアが「様子見（下落中）」に転じたら決済検討を1回だけ通知する。"""
+    def test_turn_to_wait_alerts_once(self):
+        m, st = C.check_positions([MXN], T(8.45), {}, True, "n", {"MXN_JPY": ("wait", -0.31)})
+        self.assertEqual(len(m), 1); self.assertTrue(m[0].startswith("📉 決済検討 MXN/JPY"))
+        self.assertIn("トレンド-0.31", m[0]); self.assertIn("+500円", m[0])
+        m2, st2 = C.check_positions([MXN], T(8.44), st, True, "n", {"MXN_JPY": ("wait", -0.40)})
+        self.assertEqual(m2, [], "下落中が続いても再送しない")
+
+    def test_no_alert_while_buy_or_soft(self):
+        for v in (("buy", 0.4), ("soft", -0.2)):
+            self.assertEqual(C.check_positions([MXN], T(8.45), {}, True, "n", {"MXN_JPY": v})[0], [])
+
+    def test_rearm_only_after_clear_recovery(self):
+        _, st = C.check_positions([MXN], T(8.45), {}, True, "n", {"MXN_JPY": ("wait", -0.3)})
+        _, st = C.check_positions([MXN], T(8.45), st, True, "n", {"MXN_JPY": ("soft", -0.2)})   # しきい値付近の戻り
+        m, st = C.check_positions([MXN], T(8.45), st, True, "n", {"MXN_JPY": ("wait", -0.3)})
+        self.assertEqual(m, [], "しきい値付近のチラつきでは再通知しない")
+        _, st = C.check_positions([MXN], T(8.45), st, True, "n", {"MXN_JPY": ("soft", -0.1)})   # 十分に回復
+        m, _ = C.check_positions([MXN], T(8.45), st, True, "n", {"MXN_JPY": ("wait", -0.3)})
+        self.assertEqual(len(m), 1, "十分に回復した後の再下落は再び通知する")
+
+    def test_tp_sl_takes_priority_and_closed_market(self):
+        m, st = C.check_positions([MXN], T(8.29), {}, True, "n", {"MXN_JPY": ("wait", -0.5)})
+        self.assertEqual(len(m), 1); self.assertTrue(m[0].startswith("⚠ SL到達"))
+        m, _ = C.check_positions([MXN], T(8.29), st, True, "n", {"MXN_JPY": ("wait", -0.5)})
+        self.assertEqual(m, [], "SL到達を知らせた後に決済検討は重ねない")
+        self.assertEqual(C.check_positions([MXN], T(8.45), {}, False, "n", {"MXN_JPY": ("wait", -0.5)})[0], [])
+
+    def test_subject_exit(self):
+        self.assertEqual(C.compose_subject(["📉 決済検討 x"]), "【Carry】決済検討")
+        self.assertEqual(C.compose_subject(["📉 決済検討 x", "🟢 y"]), "【Carry】買いシグナル・決済検討")
+
+
 if __name__ == "__main__":
     unittest.main()

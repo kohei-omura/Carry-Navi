@@ -357,8 +357,11 @@ def _pos_key(q):
 def _fmt_px(sym, x):
     return f"{x:.3f}" if sym.endswith("_JPY") else f"{x:.5f}"
 
-def check_positions(positions, ticker, prev, market_open, now_s):
-    """戻り値: (通知文のリスト, 次回へ引き継ぐ状態)。状態は {キー: {"tp": 時刻, "sl": 時刻}}"""
+def check_positions(positions, ticker, prev, market_open, now_s, trends=None):
+    """戻り値: (通知文のリスト, 次回へ引き継ぐ状態)。状態は {キー: {"tp": 時刻, "sl": 時刻, "exit": 時刻}}
+       trends = {ペア: (判定vcls, トレンド)}。保有ペアが「様子見（下落中）」に転じたら決済検討を1回通知。
+       再通知は、トレンドが −TREND_TH + REARM_GAP を上回って十分に戻った後だけ（しきい値付近のチラつき防止）。"""
+    trends = trends or {}
     msgs, state = [], {}
     for q in positions:
         try:
@@ -382,14 +385,28 @@ def check_positions(positions, ticker, prev, market_open, now_s):
                             f"  現在 {_fmt_px(sym, bid)} / {'TP' if hit == 'tp' else 'SL'} {_fmt_px(sym, lv)}"
                             f" → 値幅損益めやす {pl:+,.0f}円（スワップ別）— {act}")
                 st[hit] = now_s
+            vt = trends.get(sym)
+            if vt and st.get("exit") and vt[1] > -TREND_TH + REARM_GAP:
+                st.pop("exit", None)                      # 十分に回復 → 次の下落で再び通知
+            if (vt and vt[0] == "wait" and not hit and not st.get("exit")
+                    and not st.get("tp") and not st.get("sl")):
+                quote = sym.split("_")[1]
+                qj = 1.0 if quote == "JPY" else ((ticker.get(f"{quote}_JPY") or {}).get("bid") or 1.0)
+                pl = (bid - entry) * lot * 10000 * qj
+                lv = f" / SL {_fmt_px(sym, sl)}" if sl is not None else ""
+                msgs.append(f"📉 決済検討 {sym.replace('_','/')} 買い{lot:g}万通貨（建値 {_fmt_px(sym, entry)}）\n"
+                            f"  判定が「様子見（下落中）」に転換（トレンド{vt[1]:+.2f}）\n"
+                            f"  現在 {_fmt_px(sym, bid)}{lv} → 値幅損益めやす {pl:+,.0f}円（スワップ別）"
+                            f"— SL前の手仕舞い・数量減らしを検討")
+                st["exit"] = now_s
         state[k] = st
     return msgs, state
 
 
 def compose_subject(msgs):
-    pos = any(m.startswith(("🎯", "⚠ SL")) for m in msgs)
-    sig = any(m.startswith("🟢") for m in msgs)
-    return "【Carry】" + ("買いシグナル・TP/SL到達" if pos and sig else "TP/SL到達" if pos else "買いシグナル")
+    parts = [name for name, heads in (("買いシグナル", ("🟢",)), ("TP/SL到達", ("🎯", "⚠ SL")), ("決済検討", ("📉",)))
+             if any(m.startswith(heads) for m in msgs)]
+    return "【Carry】" + ("・".join(parts) or "買いシグナル")
 
 
 def _link_lines(ev, link):
@@ -460,7 +477,8 @@ def build_status(ticker, market_open):
     yen_lv=((link or {}).get("yen") or {}).get("level")
     now_s=datetime.datetime.now(JST).strftime("%Y-%m-%d %H:%M")
     targets, nstate = select_notify(pairs, buys, prev_state, events, yen_lv, now_s)
-    pos_msgs, pstate = check_positions(load_positions(), ticker, _load_prev_state("pos_state"), market_open, now_s)
+    pos_msgs, pstate = check_positions(load_positions(), ticker, _load_prev_state("pos_state"), market_open, now_s,
+                                        {p["symbol"]: (p["vcls"], p["trend"]) for p in pairs})
 
     msgs=[]
     for ev in targets:
