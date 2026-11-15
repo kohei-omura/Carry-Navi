@@ -567,6 +567,19 @@ def notify_mail(sub,body,force=False):
     except Exception as e: print(f"[WARN] mail失敗 {e}",file=sys.stderr)
 
 
+def xmarket_note():
+    """通知に足す「株×FX地合い」の2行（株オラクル・GLOBE ORACLE・FX Navi の公開ファイルを読む）。
+       補助情報なので、読めなければ空文字（通知は従来どおり送る）。Carryの判定は変えない。"""
+    try:
+        import xmarket
+        with open(STATUS_FILE,encoding="utf-8") as f:
+            own={"carry":json.load(f)}          # 自分の分は、いま書き出した最新を使う
+        return xmarket.notify_line("carry", own=own)
+    except Exception as e:
+        print(f"[WARN] 株×FX連動の注記を作れませんでした: {e}", file=sys.stderr)
+        return ""
+
+
 def main():
     now=datetime.datetime.now(JST).strftime("%Y-%m-%d %H:%M JST")
     if os.environ.get("TEST_NOTIFY","").lower()=="true":
@@ -576,6 +589,7 @@ def main():
     if not market_open: print(f"[INFO] {now} 市場クローズ")
     if not notify: print(f"[INFO] {now} 通知なし"); return
     body=(f"💱 FX Carry Navi 通知\n時刻: {now}\n金利基準: {RATE_ASOF}\n\n"+"\n\n".join(notify)
+          +xmarket_note()
           +"\n\n※金利差・スワップは変動。キャリーは急落リスク大。自己責任で。"
           +f"\n📊 FX Navi（主要円ペア）: {carry_link.FX_APP_URL}")
     print(body); notify_line(body); notify_mail(compose_subject(notify),body)

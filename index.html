@@ -267,6 +267,8 @@ body{font-feature-settings:"palt" 1}
   <div class="tiles" id="tiles"></div>
   <div class="sec" id="secFx">FX Navi 連携</div>
   <div class="glass lk" id="link"></div>
+  <div class="sec" id="secXm">株×FX 連動（4アプリ）</div>
+  <div class="glass" id="xmarket" data-app="carry" style="padding:14px"></div>
   <div class="sec" id="secRank">金利差ランキング（キャリー対リスク順）</div>
   <div class="glass rank" id="ranking"></div>
   <div class="note" id="rankNote">C/R＝金利差 ÷ 年率ボラ。高いほど「金利差のわりに値動きが穏やか」。過去ボラ基準のため、新興国の急落・減価(尾部)リスクは測りきれません。</div>
@@ -1147,4 +1149,5 @@ load();loadFx();pullShared();setInterval(load,60000);setInterval(loadFx,120000);
 setInterval(()=>{if(liveUrl())applyLive();},15000);
 setInterval(()=>{if(liveUrl())liveCarry();},180000);
 if('serviceWorker' in navigator){navigator.serviceWorker.register('carry-sw.js').catch(()=>{});}
-</script></body></html>
+</script>
+<script src="xmarket.js?v=1" defer></script></body></html>
