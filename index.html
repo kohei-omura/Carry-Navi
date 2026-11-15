@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#07090d;--s1:rgba(255,255,255,.035);--s2:rgba(255,255,255,.06);--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.14);
---ink:#eef1f6;--mut:#8b96a8;--dim:#5d6778;--gold:#d8b574;--gold2:#f2dcaa;--up:#3ee6a0;--down:#ff6b81;--amber:#f0b85a;--blue:#6ab0ff;
+--ink:#eef1f6;--mut:#8b96a8;--dim:#727d90;--gold:#d8b574;--gold2:#f2dcaa;--up:#3ee6a0;--down:#ff6b81;--amber:#f0b85a;--blue:#6ab0ff;
 --mono:'IBM Plex Mono',ui-monospace,monospace;--serif:'Shippori Mincho',serif;--r:18px}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{background:var(--bg)}
@@ -220,6 +220,30 @@ h1{font-family:var(--serif);font-weight:700;font-size:23px;margin:0;letter-spaci
 .tb{background:none;border:0;color:var(--mut);padding:8px 0 6px;border-radius:16px;font-size:10.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;letter-spacing:.04em}
 .tb svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .tb.on{color:#1a1307;background:linear-gradient(180deg,var(--gold2),var(--gold));font-weight:700;box-shadow:0 4px 16px rgba(216,181,116,.35)}
+/* ===== 仕上げ（数字の桁そろえ・操作感・アクセシビリティ・PC幅） ===== */
+body{font-feature-settings:"palt" 1}
+.mono,.bidbig,.crbig,.pnl,.tile b,.m b,.chip b,.tpsl b,.lrow,.lsub,.askline,.crlab,.rnum,.pill,.hint,.ex,.nw .t,
+.pf input,.f input{font-variant-numeric:tabular-nums}
+.btn,.nbtn,.tb,.pdel,.pedit,.rrow,.ur[data-go]{transition:transform .12s ease,background .2s,box-shadow .2s,color .2s}
+.nbtn:active,.pdel:active,.pedit:active,.tb:active{transform:scale(.96)}
+.pdel:hover,.pedit:hover,.nbtn:hover{border-color:var(--gold);color:var(--ink)}
+.ur[data-go]:active{background:var(--s2)}
+:where(button,a,select,input,summary,.rrow,[data-go]):focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:12px}
+.card{scroll-margin-top:14px}
+@media (min-width:1000px){
+  .wrap{max-width:1120px}
+  header{padding-top:18px}
+  #tab-signal.on{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:18px;align-items:start;
+    grid-template-areas:"warn warn" "tiles tiles" "sfx srk" "lk rk" "lk nt" "sp sp" "pr pr"}
+  #warn{grid-area:warn}#tiles{grid-area:tiles}#secFx{grid-area:sfx}#secRank{grid-area:srk}#link{grid-area:lk}
+  #ranking{grid-area:rk}#rankNote{grid-area:nt}#secPairs{grid-area:sp}#pairs{grid-area:pr}
+  #tab-signal>#pairs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+  #tab-signal>#pairs>.card{margin-bottom:0}
+  #tab-pos,#tab-pairs,#tab-set{max-width:640px;margin:0 auto}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
 </style></head>
 <body><div class="wrap">
 <header>
@@ -240,12 +264,12 @@ h1{font-family:var(--serif);font-weight:700;font-size:23px;margin:0;letter-spaci
 <section class="tab on" id="tab-signal">
   <div id="warn"></div>
   <div class="tiles" id="tiles"></div>
-  <div class="sec">FX Navi 連携</div>
+  <div class="sec" id="secFx">FX Navi 連携</div>
   <div class="glass lk" id="link"></div>
-  <div class="sec">金利差ランキング（キャリー対リスク順）</div>
+  <div class="sec" id="secRank">金利差ランキング（キャリー対リスク順）</div>
   <div class="glass rank" id="ranking"></div>
-  <div class="note">C/R＝金利差 ÷ 年率ボラ。高いほど「金利差のわりに値動きが穏やか」。過去ボラ基準のため、新興国の急落・減価(尾部)リスクは測りきれません。</div>
-  <div class="sec">ペア別シグナル</div>
+  <div class="note" id="rankNote">C/R＝金利差 ÷ 年率ボラ。高いほど「金利差のわりに値動きが穏やか」。過去ボラ基準のため、新興国の急落・減価(尾部)リスクは測りきれません。</div>
+  <div class="sec" id="secPairs">ペア別シグナル</div>
   <div id="pairs"></div>
 </section>
 
@@ -268,7 +292,7 @@ h1{font-family:var(--serif);font-weight:700;font-size:23px;margin:0;letter-spaci
   </div>
   <div class="sec">保有中</div>
   <div id="poslist"></div>
-  <div class="note">想定日数は carry_status.json の実測値（直近シグナルでTP/SLに先に当たった中央値）。無いペアのみ「拡散＋金利差ドリフト」モデルの推定です。スワップは金利差からの理論概算で、実際の付与額とは異なります。ポジションはこの端末にのみ保存されます。</div>
+  <div class="note">想定日数は carry_status.json の実測値（直近シグナルでTP/SLに先に当たった中央値）。無いペアのみ「拡散＋金利差ドリフト」モデルの推定です。スワップは金利差からの理論概算で、実際の付与額とは異なります。GitHub保存を設定すると、<b>TP/SLに届いた時に毎時の自動実行がLINEで1回お知らせ</b>します（市場オープン中のみ・TP/SLを編集すると再通知）。未設定ならこの端末だけに保存されます。</div>
 </section>
 
 <!-- ============ ペア一覧 ============ -->
@@ -350,6 +374,8 @@ const vmap={buy:['v-buy','買い 順張り'],soft:['v-soft','買い寄り'],wait
 const FLAG={JPY:'🇯🇵',USD:'🇺🇸',EUR:'🇪🇺',GBP:'🇬🇧',AUD:'🇦🇺',NZD:'🇳🇿',CAD:'🇨🇦',CHF:'🇨🇭',TRY:'🇹🇷',ZAR:'🇿🇦',MXN:'🇲🇽',HUF:'🇭🇺',CZK:'🇨🇿',PLN:'🇵🇱'};
 const CNAME={JPY:'円',USD:'米ドル',EUR:'ユーロ',GBP:'英ポンド',AUD:'豪ドル',NZD:'NZドル',CAD:'カナダドル',CHF:'スイスフラン',TRY:'トルコリラ',ZAR:'南アフリカランド',MXN:'メキシコペソ',HUF:'ハンガリーフォリント',CZK:'チェココルナ',PLN:'ポーランドズロチ'};
 const sp=s=>s.split('_'), slash=s=>s.replace('_','/');
+// 外部データ（指標名・注記・エラー文など）を画面に出す前に必ず通す（XSS対策）
+const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isJ=s=>s.endsWith('_JPY'), dec=s=>isJ(s)?3:5;
 const fP=(s,x)=>x==null||isNaN(x)?'—':Number(x).toFixed(dec(s));
 const fn=(x,d)=>x==null?'—':(d!=null?Number(x).toFixed(d):x);
@@ -385,7 +411,7 @@ function initWorker(){
     try{localStorage.setItem('carry_worker',v);}catch(e){}
     $('#wkMsg').textContent='接続テスト中…';
     await applyLive();
-    $('#wkMsg').innerHTML=LIVE_AT?'<span class="up">✔ 接続OK。ライブ価格を受信しました。</span>':'<span class="dn">✖ 受信できません：'+(LIVE_ERR||'不明なエラー')+'</span>';
+    $('#wkMsg').innerHTML=LIVE_AT?'<span class="up">✔ 接続OK。ライブ価格を受信しました。</span>':'<span class="dn">✖ 受信できません：'+esc(LIVE_ERR||'不明なエラー')+'</span>';
     if(LIVE_AT){liveCarry();}
   };
   $('#wkClear').onclick=()=>{try{localStorage.removeItem('carry_worker');}catch(e){}$('#wkUrl').value='';LIVE_AT=0;PRICE={};$('#wkMsg').textContent='解除しました（Actionの更新値のみ表示）。';render();};
@@ -592,8 +618,8 @@ function card(p,i){
         ${p.be_days!=null?`<span class="chip">SL1回の回収 <b>${p.be_days}日</b></span>`:''}
         <span class="chip">ATR <b>${fn(p.atr_pct,2)}%</b></span>
       </div>
-      <div class="reasons">${(p.reasons||[]).join(' ／ ')}</div></details>
-    ${p.risk?`<div class="riskb">⚠ ${p.risk_note||'リスク注意'}</div>`:''}
+      <div class="reasons">${(p.reasons||[]).map(esc).join(' ／ ')}</div></details>
+    ${p.risk?`<div class="riskb">⚠ ${esc(p.risk_note||'リスク注意')}</div>`:''}
     ${holdBadge(p)}
     <button class="btn ghost" type="button" data-reg="${p.symbol}">このペアで建玉を登録（TP/SL自動入力）</button></div>`;
 }
@@ -615,7 +641,7 @@ function universe(){
     const rows=U.filter(u=>u.role===k);if(!rows.length)return'';
     return`<div class="sec" style="margin-top:14px">${t}（${rows.length}）</div><div class="glass grp">`+rows.map(u=>{
       const p=findPair(u.symbol),[vc,vt]=p?(vmap[p.vcls]||vmap.none):['',''];
-      return`<div class="ur"${p?` data-go="${u.symbol}" style="cursor:pointer"`:''}>${flags(u.symbol)}<div class="t">${slash(u.symbol)}<small>${u.note}</small></div>
+      return`<div class="ur"${p?` data-go="${u.symbol}" style="cursor:pointer"`:''}>${flags(u.symbol)}<div class="t">${slash(u.symbol)}<small>${esc(u.note)}</small></div>
         ${p?`<span class="vchip ${vc}">${vt}</span>`:`<span class="badge ${cls[k]}">${lab[k]}</span>`}</div>`;}).join('')+`</div>`;
   }).join('');
   const a=findPair('AUD_NZD');if(a)$('#recDiff').textContent=sg(a.diff)+Math.abs(a.diff).toFixed(2)+'%';
@@ -734,6 +760,7 @@ function fillPosSelect(){
   sel.dataset.sig=syms.join();
   sel.innerHTML=syms.map(s=>`<option value="${s}">${slash(s)}</option>`).join('');
   if(syms.includes(cur))sel.value=cur;
+  if(!$('#pfEntry').value)prefillEntry();   // 初回表示でも建値(Ask)とTP/SLを入れておく
 }
 function gotoReg(sym){
   setTab('pos');$('#pfSym').value=sym;prefillEntry();
@@ -761,7 +788,7 @@ function renderFeed(){
     if(LIVE_AT&&Date.now()-LIVE_AT<60000)w.innerHTML='';
     else{
       const g=genMs(),age=isNaN(g)?null:Date.now()-g;
-      w.innerHTML=`<div class="warnbar" id="warnGo">⚠ <b>ライブ価格が未接続</b>です。表示価格は<b>${age==null?'不明':ageText(age)+'前'}</b>のスナップショットで、実際の価格とずれます。${liveUrl()&&LIVE_ERR?'<br>接続エラー：'+LIVE_ERR:''}<br>タップして設定（Worker URL）へ →</div>`;
+      w.innerHTML=`<div class="warnbar" id="warnGo">⚠ <b>ライブ価格が未接続</b>です。表示価格は<b>${age==null?'不明':ageText(age)+'前'}</b>のスナップショットで、実際の価格とずれます。${liveUrl()&&LIVE_ERR?'<br>接続エラー：'+esc(LIVE_ERR):''}<br>タップして設定（Worker URL）へ →</div>`;
     }
   }
 }
@@ -770,7 +797,7 @@ function render(){
   $('#mkt').innerHTML='<i></i>'+(S.market_open?'MARKET OPEN':'MARKET CLOSED');
   $('#mkt').className='pill '+(S.market_open?'open':'close');
   renderFeed();tiles();
-  try{renderLink();}catch(e){const b=$('#link');if(b)b.innerHTML='<div class="empty">連携表示エラー: '+e.message+'</div>';}
+  try{renderLink();}catch(e){const b=$('#link');if(b)b.innerHTML='<div class="empty">連携表示エラー: '+esc(e.message)+'</div>';}
   $('#ranking').innerHTML=(S.ranking||[]).map(rankRow).join('')||'<div class="empty">データなし</div>';
   $('#pairs').innerHTML=(S.pairs||[]).map(card).join('');
   universe();fillPosSelect();renderPos();try{renderPfSize();renderEqSrc();}catch(e){}
@@ -845,7 +872,7 @@ async function pullShared(){
   renderSync();render();
 }
 function renderSync(){
-  const m=$('#ghMsg');if(m)m.innerHTML=`<span class="${SYNC.st==='err'||SYNC.st==='local'?'dn':SYNC.st==='ok'?'up':''}">${SYNC.msg||''}</span>`;
+  const m=$('#ghMsg');if(m)m.innerHTML=`<span class="${SYNC.st==='err'||SYNC.st==='local'?'dn':SYNC.st==='ok'?'up':''}">${esc(SYNC.msg||'')}</span>`;
 }
 function initSync(){
   const i=$('#ghTok');if(!i)return;
@@ -935,7 +962,7 @@ function newsHoldUI(sym){
 function holdBadge(p){
   const h=newsHoldUI(p.symbol)||p.news_hold;
   if(!h)return'';
-  return`<div class="riskb" style="color:#f3d9a6;background:rgba(240,184,90,.07);border-color:rgba(240,184,90,.35)">📅 ${FLAG[h.country]||''}${h.country} ${h.title}（${String(h.time).slice(5,16)}）の前後${NEWS_HOLD_MIN}分は新規の買い通知を保留中</div>`;
+  return`<div class="riskb" style="color:#f3d9a6;background:rgba(240,184,90,.07);border-color:rgba(240,184,90,.35)">📅 ${FLAG[h.country]||''}${esc(h.country)} ${esc(h.title)}（${esc(String(h.time).slice(5,16))}）の前後${NEWS_HOLD_MIN}分は新規の買い通知を保留中</div>`;
 }
 function fxPositions(){
   if(FX&&Array.isArray(FX.open_positions))return FX.open_positions.map(p=>({symbol:p.symbol,side:p.side||'long',lot:+p.lot||0,current:p.current,entry:p.entry}));
@@ -968,9 +995,9 @@ function renderLink(){
   const nl=newsList().filter(n=>{const t=jstMs(n.time);return t!=null&&t-Date.now()>-NEWS_HOLD_MIN*60e3;}).slice(0,5);
   const news=`<div class="lkrow"><small>直近の重要指標（キャリー対象に関係するもの・48時間）</small>
     ${nl.length?nl.map(n=>{const t=jstMs(n.time),hot=Math.abs(t-Date.now())<=NEWS_HOLD_MIN*60e3;
-      return`<div class="nw${hot?' hot':''}"><span class="t">${n.time.slice(5).replace('-','/')}</span><span>${FLAG[n.country]||''} ${n.title}</span><span class="p">${hot?'通知保留中':n.pairs.length+'ペア'}</span></div>`;}).join('')
+      return`<div class="nw${hot?' hot':''}"><span class="t">${esc(n.time.slice(5).replace('-','/'))}</span><span>${FLAG[n.country]||''} ${esc(n.title)}</span><span class="p">${hot?'通知保留中':n.pairs.length+'ペア'}</span></div>`;}).join('')
       :`<div class="nw"><span class="t">—</span><span style="color:var(--mut)">${L.news_ok===false?'カレンダー未取得':'予定なし'}</span><span></span></div>`}
-    ${L.news_warn?`<div class="lkw">⚠ ${L.news_warn}</div>`:''}</div>`;
+    ${L.news_warn?`<div class="lkw">⚠ ${esc(L.news_warn)}</div>`:''}</div>`;
   // 合計リスク
   const {ex,src,notional}=exposure(),keys=Object.keys(ex).filter(k=>Math.abs(ex[k])>=1).sort((a,b)=>Math.abs(ex[b])-Math.abs(ex[a]));
   const mx=Math.max(1,...keys.map(k=>Math.abs(ex[k])));
@@ -1028,7 +1055,7 @@ function carryEval(sym,o){const P=CP,closes=o.map(r=>r[2]);if(closes.length<Math
   let risk=vol>=HIGH_VOL_PCT;const em=EM.has(sym);let note='';
   if(sym==='TRY_JPY')note='超高金利＝急落・減価リスク特大。少額・長期前提で';else if(em)note='新興国通貨・尾部(急落)リスクあり';else if(risk)note='高ボラ';
   risk=risk||em;
-  const reasons=[`金利差${diff>=0?'+':''}${rN(diff,2)}%`];
+  const reasons=[`金利差${diff>=0?'+':''}${diff.toFixed(2)}%`];   // Python版と同じ2桁表記
   if(Math.abs(emaSig)>0.2)reasons.push(`EMA${emaSig>0?'上':'下'}(${P.ema_f}/${P.ema_s})`);
   if(Math.abs(macdSig)>0.2)reasons.push(`MACD${md[2]>0?'+':'-'}`);
   reasons.push(`RSI${Math.round(rv)}`);reasons.push(`ADX${Math.round(adxv)}`);
