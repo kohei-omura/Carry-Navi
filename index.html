@@ -181,6 +181,7 @@ h1{font-family:var(--serif);font-weight:700;font-size:23px;margin:0;letter-spaci
 .slbox{background:rgba(255,107,129,.07);border:1px solid rgba(255,107,129,.3);color:var(--down)}.slbox em{color:#ffb3be}
 .alert{margin-top:12px;padding:10px 12px;border-radius:12px;font-size:12.5px;font-weight:700;text-align:center}
 .alert.tp{background:rgba(62,230,160,.14);border:1px solid rgba(62,230,160,.5);color:var(--up)}
+.alert.exit{background:rgba(240,184,90,.12);border:1px solid rgba(240,184,90,.5);color:var(--amber)}
 .alert.sl{background:rgba(255,107,129,.14);border:1px solid rgba(255,107,129,.5);color:var(--down)}
 .empty{padding:26px 16px;text-align:center;color:var(--mut);font-size:12.5px;line-height:1.8}
 /* ===== ペア一覧 ===== */
@@ -292,7 +293,7 @@ body{font-feature-settings:"palt" 1}
   </div>
   <div class="sec">保有中</div>
   <div id="poslist"></div>
-  <div class="note">想定日数は carry_status.json の実測値（直近シグナルでTP/SLに先に当たった中央値）。無いペアのみ「拡散＋金利差ドリフト」モデルの推定です。スワップは金利差からの理論概算で、実際の付与額とは異なります。GitHub保存を設定すると、<b>TP/SLに届いた時に毎時の自動実行がLINEで1回お知らせ</b>します（市場オープン中のみ・TP/SLを編集すると再通知）。未設定ならこの端末だけに保存されます。</div>
+  <div class="note">想定日数は carry_status.json の実測値（直近シグナルでTP/SLに先に当たった中央値）。無いペアのみ「拡散＋金利差ドリフト」モデルの推定です。スワップは金利差からの理論概算で、実際の付与額とは異なります。GitHub保存を設定すると、<b>TP/SLに届いた時と、保有ペアが「様子見（下落中）」に転じた時（📉決済検討）に、毎時の自動実行がLINEで1回お知らせ</b>します（市場オープン中のみ）。未設定ならこの端末だけに保存されます。</div>
 </section>
 
 <!-- ============ ペア一覧 ============ -->
@@ -676,6 +677,7 @@ function renderPos(){
     let al='';
     if(cur!=null&&tp!=null&&cur>=tp)al=`<div class="alert tp">🎯 TP到達 — 利確を検討（TP ${fP(q.sym,tp)}）</div>`;
     else if(cur!=null&&sl!=null&&cur<=sl)al=`<div class="alert sl">⚠ SL到達 — 損切りを検討（SL ${fP(q.sym,sl)}）</div>`;
+    else if(p&&p.vcls==='wait')al=`<div class="alert exit">📉 下落トレンド入り（トレンド${p.trend>=0?'+':''}${fn(p.trend,2)}）— SL前の手仕舞い・数量減らしを検討</div>`;
     let dTp='—',dSl='—';
     if(p){
       const rem=h=>h==null?null:Math.max(0,h/24-held);
